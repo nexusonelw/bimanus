@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@bimanus/pi-sdk-driver": ["../../packages/pi-sdk-driver/src/index.ts"],
+      "@bimanus/pi-sdk-driver/dev-reload-probe": ["../../packages/pi-sdk-driver/src/dev-reload-probe.ts"],
+      "@bimanus/catalogs": ["../../packages/catalogs/src/index.ts"],
+      "@bimanus/catalogs/dev-reload-probe": ["../../packages/catalogs/src/dev-reload-probe.ts"],
+      "@bimanus/session-driver": ["../../packages/session-driver/src/index.ts"],
+      "@bimanus/session-driver/runtime-types": ["../../packages/session-driver/src/runtime-types.ts"],
+      "@bimanus/session-driver/dev-reload-probe": ["../../packages/session-driver/src/dev-reload-probe.ts"]
+    }
+  }
+}

@@ -1,0 +1,650 @@
+/* ============================================================
+   SplitPanel — 右侧分屏面板样式
+   ============================================================
+   设计依据: split-panel-ui-design.md §2 整体布局架构
+   ============================================================ */
+
+/* ── CSS 变量 ── */
+:root {
+  /* 默认值用长度而非 1fr：1fr 无法与长度在 min()/calc() 内混用。
+     拖拽时 useSplitPanelResize 会写入实际像素值覆盖此默认。 */
+  --split-panel-width: 600px;
+  --split-panel-toolbar-height: 40px;
+  --split-panel-pane-gap: 2px;
+  --split-panel-border-radius: 4px;
+}
+
+/* ── 基础容器 ── */
+
+.split-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* Prefer user-selected Chinese-color surface; fall back to 淡青. */
+  --bg-surface: var(--surface-bg-custom, #F4FAFB);
+  /* Keep raised/muted nearly as light as the base pastel so chrome stays airy. */
+  --bg-surface-raised: color-mix(in srgb, var(--bg-surface) 94%, #000 6%);
+  --bg-surface-muted: color-mix(in srgb, var(--bg-surface) 90%, #000 10%);
+  --border-subtle: color-mix(in srgb, var(--bg-surface) 86%, #000 14%);
+  background: var(--bg-surface, #F4FAFB);
+  border-left: 1px solid var(--border-subtle, #e1e4ea);
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: 100%;
+  position: relative;
+}
+
+.split-panel--collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  overflow: hidden;
+  border-left: none;
+}
+
+.split-panel--hidden {
+  display: none;
+}
+
+/* ── 工具栏 ── */
+
+.split-panel__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--split-panel-toolbar-height);
+  padding: 0 8px;
+  background: var(--bg-surface-raised, #f0f2f5);
+  border-bottom: 1px solid var(--border-subtle, #e1e4ea);
+  flex-shrink: 0;
+  /* Frameless window: blank area of the right-panel header drags the window. */
+  -webkit-app-region: drag;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Interactive controls only — leave empty tabs gutter as a drag region. */
+.split-panel__tab,
+.split-panel__tab *,
+.split-panel__toolbar-actions,
+.split-panel__toolbar-actions * {
+  -webkit-app-region: no-drag;
+}
+
+/* Windows/Linux caption buttons occupy the top-right edge of the window. */
+html.platform-win32 .split-panel__toolbar,
+html.platform-linux .split-panel__toolbar {
+  padding-right: 140px;
+}
+
+.split-panel__toolbar-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  /* min-width:0 is critical: without it, flex children default to
+     min-width:auto and refuse to shrink below their content width,
+     which can push .split-panel__toolbar-actions off-screen on
+     narrow mobile viewports. */
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  padding: 2px 0;
+}
+
+.split-panel__toolbar-tabs::-webkit-scrollbar {
+  height: 3px;
+}
+
+.split-panel__toolbar-tabs::-webkit-scrollbar-thumb {
+  background: var(--border-subtle, #d0d4dd);
+  border-radius: 2px;
+}
+
+/* ── Tab 标签 ── */
+
+.split-panel__tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px 0 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 520;
+  color: var(--muted-strong, #6b7191);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  position: relative;
+  user-select: none;
+}
+
+.split-panel__tab:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: var(--border-subtle, #e1e4ea);
+  color: var(--text-strong, #1a1d29);
+}
+
+.split-panel__tab--active {
+  background: var(--bg-surface, #ffffff);
+  border-color: var(--border-subtle, #d0d4dd);
+  color: var(--text-strong, #1a1d29);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.split-panel__tab--pending {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* Tab CLI brand icon */
+.split-panel__tab-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  line-height: 0;
+}
+
+.split-panel__tab-icon .cli-brand-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+/* Tab 标题 */
+.split-panel__tab-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+/* Tab 关闭按钮 */
+.split-panel__tab-close {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--muted-soft, #949aaf);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 100ms ease, background 100ms ease;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.split-panel__tab:hover .split-panel__tab-close {
+  opacity: 1;
+}
+
+.split-panel__tab-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-strong, #1a1d29);
+}
+
+/* ── 工具栏右侧操作区 ── */
+
+.split-panel__toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 8px;
+  border-left: 1px solid var(--border-subtle, #e1e4ea);
+}
+
+.split-panel__toolbar-button {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted-strong, #6b7191);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+  font-size: 14px;
+  padding: 0;
+  position: relative;
+}
+
+.split-panel__toolbar-button:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-strong, #1a1d29);
+}
+
+.split-panel__toolbar-button--active {
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--accent, #6366f1);
+  border-color: rgba(99, 102, 241, 0.15);
+}
+
+/* ── 新建会话下拉菜单 ── */
+
+.split-panel__session-selector {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 100;
+  min-width: 180px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle, #d7dce8);
+  background: var(--bg-surface, rgba(255, 255, 255, 0.98));
+  box-shadow: 0 12px 32px rgba(20, 27, 45, 0.12);
+  display: grid;
+  gap: 2px;
+}
+
+.split-panel__session-option {
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text-strong, #1a1d29);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 100ms ease;
+}
+
+.split-panel__session-option:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.split-panel__session-option-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  line-height: 0;
+}
+
+.split-panel__session-option-icon .cli-brand-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+/* ── Canvas（Grid 布局容器） ── */
+
+.split-panel__canvas {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  gap: var(--split-panel-pane-gap);
+  background: var(--bg-surface, #f8f9fb);
+  padding: var(--split-panel-pane-gap);
+  position: relative;
+}
+
+/* 布局变体 */
+.split-panel__canvas--single {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+}
+
+.split-panel__canvas--dual {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
+}
+
+.split-panel__canvas--quad {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
+}
+
+.split-panel__canvas--grid4 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+/* ── 单个 Pane ── */
+
+.split-panel__pane {
+  /* Same shrink rule as .terminal-panel: grid items default to min-width:auto
+     and would otherwise refuse to shrink below the xterm canvas width. */
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  background: var(--bg-surface, #ffffff);
+  border: 1px solid var(--border-subtle, #e1e4ea);
+  border-radius: var(--split-panel-border-radius);
+  display: flex;
+  flex-direction: column;
+}
+
+.split-panel__pane--empty {
+  display: grid;
+  place-items: center;
+  background: var(--bg-surface-raised, #f0f2f5);
+  border-style: dashed;
+  border-color: var(--border-subtle, #d0d4dd);
+}
+
+.split-panel__pane--active {
+  border-color: rgba(99, 102, 241, 0.25);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.08);
+}
+
+/* Pane 顶栏（迷你 Tab 条） */
+.split-panel__pane-header {
+  display: flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 8px;
+  font-size: 11px;
+  gap: 6px;
+  background: var(--bg-surface-raised, #f5f6f8);
+  border-bottom: 1px solid var(--border-subtle, #e1e4ea);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.split-panel__pane-header-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 520;
+  color: var(--muted-strong, #6b7191);
+}
+
+.split-panel__pane-header-status {
+  font-size: 10px;
+  color: var(--muted-soft, #949aaf);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-left: auto;
+}
+
+/* Pane 终端容器 */
+.split-panel__pane-terminal {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.split-panel__pane-terminal > .terminal-panel {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  border-top: 0;
+}
+
+.split-panel__pane-terminal > .terminal-panel--takeover {
+  grid-row: auto;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Pane 空状态 */
+.split-panel__pane-empty-placeholder {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+}
+
+.split-panel__pane-empty-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--bg-surface-muted, #e8eaef);
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  color: var(--muted-soft, #949aaf);
+}
+
+.split-panel__pane-empty-text {
+  font-size: 12px;
+  color: var(--muted-soft, #949aaf);
+  line-height: 1.4;
+  max-width: 140px;
+}
+
+/* ── 分割条（垂直） ── */
+
+.split-panel__divider {
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  position: relative;
+  z-index: 5;
+  flex-shrink: 0;
+  background: transparent;
+  transition: background 200ms ease;
+  -webkit-app-region: no-drag;
+  user-select: none;
+  touch-action: none;
+}
+
+.split-panel__divider:hover,
+.split-panel__divider--active {
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.split-panel__divider::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 32px;
+  border-radius: 1px;
+  background: var(--border-subtle, #d0d4dd);
+  transition: background 200ms ease;
+}
+
+.split-panel__divider:hover::after,
+.split-panel__divider--active::after {
+  background: rgba(99, 102, 241, 0.4);
+}
+
+/* ── 工作目录绑定指示器 ── */
+
+.split-panel__cwd-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  color: var(--muted-soft, #949aaf);
+  background: var(--bg-surface, #f8f9fb);
+  border-top: 1px solid var(--border-subtle, #e1e4ea);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.split-panel__cwd-indicator-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  font-size: 10px;
+}
+
+.split-panel__cwd-indicator-label {
+  font-weight: 520;
+  flex-shrink: 0;
+}
+
+.split-panel__cwd-indicator--follow {
+  color: var(--accent, #6366f1);
+}
+
+.split-panel__cwd-indicator--manual {
+  color: var(--muted-strong, #6b7191);
+}
+
+/* ── 加载 / 空状态 ── */
+
+.split-panel__loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--muted-soft, #949aaf);
+  font-size: 13px;
+}
+
+.split-panel__loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-subtle, #e1e4ea);
+  border-top-color: var(--accent, #6366f1);
+  border-radius: 50%;
+  animation: split-panel-spin 0.6s linear infinite;
+}
+
+@keyframes split-panel-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── 拖拽时全局状态 ── */
+
+.split-panel--dragging {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* ── 动画过渡 ── */
+
+.split-panel {
+  transition: width 200ms ease, min-width 200ms ease, opacity 150ms ease;
+}
+
+.split-panel__pane {
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.split-panel__tab {
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+/* ── 响应式 ── */
+
+@media (max-width: 900px) {
+  .split-panel__tab {
+    max-width: 80px;
+  }
+
+  .split-panel__tab-title {
+    max-width: 60px;
+  }
+}
+
+/*
+ * Mobile: keep the CLI split panel available.
+ * Layout for narrow viewports is handled by .shell scroll-snap rules in sidebar.css
+ * (main ↔ split-panel horizontal paging). Do not force-hide the panel here.
+ */
+@media (max-width: 640px) {
+  .split-panel__tab {
+    max-width: 72px;
+  }
+
+  .split-panel__tab-title {
+    max-width: 48px;
+  }
+
+  .split-panel__divider {
+    display: none;
+  }
+}
+
+/* ── Shell 扩展（分屏布局） ──
+   DOM 顺序为: [Sidebar?] [main] [SplitPanelDivider] [split-panel]
+   因此列模板必须按同样的顺序声明轨道，否则会与 DOM 物理顺序错位。
+   - 侧边栏展开 + 分屏开启：4 列 = sidebar | main | divider(6px) | split-panel
+   - 侧边栏折叠 + 分屏开启：3 列 = main | divider(6px) | split-panel
+
+   提升选择器权重：使用 .shell.shell--with-split-panel 覆盖默认的 2 列网格
+*/
+
+.shell.shell--with-split-panel {
+  grid-template-columns:
+    clamp(220px, var(--sidebar-width, 292px), 600px)
+    minmax(var(--main-min-width, 360px), 1fr)
+    6px
+    minmax(0, min(var(--split-panel-width, 600px), 100% - clamp(220px, var(--sidebar-width, 292px), 600px) - 6px - var(--main-min-width, 360px)));
+}
+
+.shell.shell--with-split-panel.shell--sidebar-collapsed {
+  grid-template-columns:
+    minmax(var(--main-min-width, 360px), 1fr)
+    6px
+    minmax(0, min(var(--split-panel-width, 600px), 100% - 6px - var(--main-min-width, 360px)));
+}
+
+/* ── 深色模式 ── */
+
+:root.dark .split-panel {
+  --bg-surface: #1a1b23;
+  --bg-surface-raised: #21222b;
+  --bg-surface-muted: #282a34;
+  --border-subtle: #2e303e;
+}
+
+:root.dark .split-panel__tab:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:root.dark .split-panel__tab--active {
+  background: var(--bg-surface, #1a1b23);
+  border-color: #3a3c4a;
+}
+
+:root.dark .split-panel__toolbar-button:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:root.dark .split-panel__session-option:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:root.dark .split-panel__divider:hover,
+:root.dark .split-panel__divider--active {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+:root.dark .split-panel__pane--empty {
+  background: var(--bg-surface-raised, #21222b);
+}
+
+:root.dark .split-panel__pane-header {
+  background: var(--bg-surface-muted, #282a34);
+}
+
+:root.dark .split-panel__cwd-indicator {
+  background: var(--bg-surface, #1a1b23);
+}

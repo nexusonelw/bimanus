@@ -1,0 +1,33 @@
+packages:
+  - apps/*
+  - packages/*
+
+supportedArchitectures:
+  os:
+    - current
+    - win32
+  cpu:
+    - current
+    - x64
+    - arm64
+
+overrides:
+  undici: 7.25.0
+
+onlyBuiltDependencies:
+  - '@google/genai'
+  - electron
+  - electron-winstaller
+  - esbuild
+  - node-pty
+  - protobufjs
+  - sharp
+
+allowBuilds:
+  '@google/genai': true
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  node-pty: true
+  protobufjs: true
+  sharp: true

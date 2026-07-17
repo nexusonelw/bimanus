@@ -1,0 +1,65 @@
+{
+  "name": "bimanus",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "packageManager": "pnpm@10.25.0",
+  "scripts": {
+    "postinstall": "node scripts/ensure-electron-binary.mjs",
+    "dev": "pnpm --filter @bimanus/desktop dev",
+    "bun:dev": "cd apps/desktop && bun run dev",
+    "build": "pnpm -r --if-present build",
+    "bun:build": "for dir in apps/* packages/*; do (cd \"$dir\" && (grep -q '\"bun:build\":' package.json && bun run bun:build || (grep -q '\"build\":' package.json && bun run build))); done",
+    "typecheck": "pnpm --filter @bimanus/session-driver build && pnpm --filter @bimanus/catalogs build && pnpm --filter @bimanus/pi-sdk-driver build && pnpm -r --if-present typecheck",
+    "bun:typecheck": "cd packages/session-driver && bun run build && cd ../pi-sdk-driver && bun run build && cd ../catalogs && bun run build && for dir in apps/* packages/*; do (cd \"$dir\" && grep -q '\"typecheck\":' package.json && bun run typecheck); done",
+    "bun:package": "cd apps/desktop && bun run bun:package",
+    "bun:package:dir": "cd apps/desktop && bun run bun:package:dir",
+    "bun:package:linux": "cd apps/desktop && bun run bun:package:linux",
+    "bun:package:linux:dir": "cd apps/desktop && bun run bun:package:linux:dir",
+    "bun:package:win": "cd apps/desktop && bun run bun:package:win",
+    "bun:package:win:dir": "cd apps/desktop && bun run bun:package:win:dir",
+    "bun:package:win:arm64": "cd apps/desktop && bun run bun:package:win:arm64",
+    "bun:package:win:arm64:dir": "cd apps/desktop && bun run bun:package:win:arm64:dir",
+    "lint": "pnpm -r --if-present lint",
+    "bun:lint": "for dir in apps/* packages/*; do (cd \"$dir\" && (grep -q '\"bun:lint\":' package.json && bun run bun:lint || (grep -q '\"lint\":' package.json && bun run lint))); done",
+    "test": "pnpm -r --if-present test",
+    "bun:test": "for dir in apps/* packages/*; do (cd \"$dir\" && (grep -q '\"bun:test\":' package.json && bun run bun:test || (grep -q '\"test\":' package.json && bun run test))); done",
+    "e2e": "playwright test",
+    "test:homebrew-tap": "node scripts/test-update-homebrew-tap.mjs",
+    "verify:install-copy": "node scripts/verify-install-copy.mjs",
+    "verify:homebrew-flow": "node scripts/verify-homebrew-flow.mjs",
+    "release:homebrew-sync": "node scripts/release-homebrew-sync.mjs",
+    "release": "node scripts/release-local.mjs",
+    "release:dry": "node scripts/release-local.mjs --dry-run",
+    "release:build-only": "node scripts/release-local.mjs --no-publish"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild",
+      "node-pty"
+    ],
+    "supportedArchitectures": {
+      "os": [
+        "current"
+      ],
+      "cpu": [
+        "current",
+        "x64",
+        "arm64"
+      ]
+    },
+    "overrides": {
+      "undici": "7.25.0"
+    }
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

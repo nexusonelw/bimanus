@@ -1,0 +1,17 @@
+{
+  "name": "@bimanus/cli-adapter",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "license": "MIT",
+  "description": "Unified CLI adapter abstraction for CodeX, Claude Code, and OpenCode CLIs.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

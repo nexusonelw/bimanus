@@ -1,0 +1,101 @@
+appId: com.bimanus.desktop
+productName: Bimanus
+copyright: Copyright 2026 Matthew Lam
+electronVersion: 34.5.8
+
+directories:
+  output: release
+  buildResources: resources
+
+files:
+  - out/**/*
+  - package.json
+
+extraResources:
+  - from: resources/icon.png
+    to: icon.png
+
+npmRebuild: false
+
+# electron-builder strips root-level node_modules from extraResources. The macOS
+# afterPack hook re-injects bundled npm into node-runtime/lib/node_modules.
+afterPack: scripts/inject-macos-npm-runtime.mjs
+
+asar: true
+asarUnpack:
+  - "**/*.node"
+  - "**/*.wasm"
+  - "**/node_modules/node-pty/**/*"
+  - "**/node_modules/.pnpm/node-pty*/node_modules/node-pty/**/*"
+
+artifactName: ${productName}-${version}-${arch}.${ext}
+
+mac:
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.inherit.plist
+  binaries:
+    - Contents/MacOS/pi-gui-notification-status-helper
+  notarize: true
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  darkModeSupport: true
+  extraResources:
+    - from: build/native/node-runtime/darwin/${arch}
+      to: node-runtime
+  extraFiles:
+    - from: build/native/pi-gui-notification-status-helper
+      to: MacOS/pi-gui-notification-status-helper
+
+linux:
+  category: Development
+  executableName: Bimanus
+  target:
+    - target: AppImage
+
+win:
+  defaultArch: x64
+  executableName: Bimanus
+  icon: resources/icon.ico
+  asarUnpack:
+    - "**/*.node"
+    - "**/*.wasm"
+    - "**/node_modules/node-pty/**/*"
+    - "**/node_modules/.pnpm/node-pty*/node_modules/node-pty/**/*"
+    - "**/node_modules/@earendil-works/pi-coding-agent/**/*"
+    - "**/node_modules/@vscode/ripgrep/**/*"
+    - "**/node_modules/@vscode/ripgrep-win32-x64/**/*"
+    - "**/node_modules/@vscode/ripgrep-win32-arm64/**/*"
+    - "out/mcp-bridge-extension/**/*"
+  target:
+    - target: nsis
+      arch: x64
+
+toolsets:
+  appimage: "1.0.2"
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+  window:
+    width: 540
+    height: 380
+
+publish:
+  provider: github
+  owner: nexusonelw
+  repo: bimanus
