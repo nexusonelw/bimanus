@@ -320,10 +320,6 @@ Multi-terminal concurrency is built on a single shared `DesktopAppStore`. Each t
 - Built on top of [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent).
 - Upstream runtime and ecosystem by [`earendil-works/pi`](https://github.com/earendil-works/pi).
 
-## 致谢
-
-[linux.do](https://linux.do) — 感谢社区提供的交流平台与成员们的反馈建议，让这个项目在实际使用场景中不断打磨完善。
-
 ## License
 
 MIT. See [LICENSE](./LICENSE).
