@@ -2000,6 +2000,7 @@ function buildTerminalEnv(
   env.COLORTERM = "truecolor";
   env.TERM_PROGRAM = "pi-gui";
   if (launchConfig.mode === "pi-tui") {
+    env.PI_SKIP_VERSION_CHECK = "1";
     if (usesElectronRunAsNode) {
       env.ELECTRON_RUN_AS_NODE = "1";
     } else {

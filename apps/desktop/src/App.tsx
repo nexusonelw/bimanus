@@ -523,8 +523,13 @@ export default function App() {
   const tuiWorkspace = openNewTuiWorkspace ?? openExistingTuiWorkspace;
   const tuiSessionId = openExistingTuiTarget?.sessionId;
   const tuiWorkspaceId = openExistingTuiTarget?.workspaceId ?? openNewTuiWorkspaceId;
+  const tuiSession = tuiSessionId
+    ? tuiWorkspace?.sessions.find((session) => session.id === tuiSessionId)
+    : undefined;
 
   const splitPanelWorkspaceId = tuiWorkspaceId ?? selectedWorkspace?.id ?? "";
+  const diffPanelWorkspaceId = splitPanelWorkspaceId;
+  const diffPanelSessionStatus = tuiWorkspaceId ? tuiSession?.status : selectedSession?.status;
   const splitPanelTabs = useSplitPanelTabs(splitPanelWorkspaceId);
   const showSplitPanel = Boolean(splitPanelWorkspaceId && splitPanelWorkspaceKeys[splitPanelWorkspaceId]);
   const { prune: pruneSplitPanelTabs } = splitPanelTabs;
@@ -1011,7 +1016,6 @@ export default function App() {
     setSplitPanelWorkspaceKeys((prev) => {
       const isCurrentlyShown = prev[splitPanelWorkspaceId];
       if (!isCurrentlyShown) {
-        setShowDiffPanel(false);
         setShowSystemPromptPanel(false);
       }
       return isCurrentlyShown
@@ -1047,7 +1051,6 @@ export default function App() {
       if (!event.workspaceId || !event.tabId || !isSplitPanelCliType(event.cliType)) {
         return;
       }
-      setShowDiffPanel(false);
       setShowSystemPromptPanel(false);
       setSplitPanelWorkspaceKeys((prev) => setSessionKeyFlag(prev, event.workspaceId));
       setPendingOpenCodingCli(event);
@@ -1611,7 +1614,6 @@ export default function App() {
   const mainClassName = [
     "main",
     showSystemPromptPanel ? "main--with-system-prompt" : "",
-    showDiffPanel ? "main--with-diff" : "",
     isTerminalVisibleForSelectedThread || showTuiTakeover ? "main--with-terminal" : "",
     showTerminalTakeover || (showTuiTakeover && !isTerminalVisibleForSelectedThread) ? "main--terminal-takeover" : "",
     showTuiWithTerminal ? "main--tui-with-terminal" : "",
@@ -2326,7 +2328,7 @@ export default function App() {
     );
   }
 
-  const shellClassName = `shell${snapshot.sidebarCollapsed ? " shell--sidebar-collapsed" : ""}${showSplitPanel ? " shell--with-split-panel" : ""}`;
+  const shellClassName = `shell${snapshot.sidebarCollapsed ? " shell--sidebar-collapsed" : ""}${showSplitPanel ? " shell--with-split-panel" : ""}${showDiffPanel ? " shell--with-diff-panel" : ""}`;
   const shellStyle = { ["--sidebar-width" as "--sidebar-width"]: `${sidebarWidth}px` } as CSSProperties & Record<"--sidebar-width", string>;
   // TUI takeover hides the topbar; keep a floating expand control when the sidebar is collapsed.
   const showFloatingSidebarToggle =
@@ -2448,15 +2450,6 @@ export default function App() {
             updateSnapshot={updateSnapshot}
           />
         ) : null}
-        {showDiffPanel && selectedWorkspace && selectedSession ? (
-          <DiffPanel
-            workspaceId={selectedWorkspace.id}
-            sessionId={selectedSession.id}
-            api={api}
-            sessionStatus={selectedSession.status}
-            fileRequest={diffFileRequest}
-          />
-        ) : null}
       </main>
 
       {showSplitPanel && (
@@ -2480,6 +2473,16 @@ export default function App() {
           surfaceBgColor={snapshot.splitPanelBgColor}
         />
       )}
+
+      {showDiffPanel && diffPanelWorkspaceId ? (
+        <DiffPanel
+          key={diffPanelWorkspaceId}
+          workspaceId={diffPanelWorkspaceId}
+          api={api}
+          sessionStatus={diffPanelSessionStatus}
+          fileRequest={diffFileRequest}
+        />
+      ) : null}
     </div>
   );
 }

@@ -20,7 +20,13 @@ import { promisify } from "node:util";
 import { DesktopAppStore, type DesktopAppViewState } from "./app-store";
 import { logTuiPerf, TUI_PERF_LOG_PREFIX } from "../src/tui-perf-log";
 import { installCopySelectionContextMenu } from "./context-menu";
-import { getChangedFiles, getFileDiff, stageFile } from "./app-store-diff";
+import {
+  commitChanges,
+  getChangedFiles,
+  getFileDiff,
+  listRemoteBranches,
+  pushRemoteBranch,
+} from "./app-store-diff";
 import { listWorkspaceFiles } from "./app-store-files";
 import { MAIN_DEV_RELOAD_MARKER } from "./dev-reload-main-probe";
 import { NotificationManager } from "./notification-manager";
@@ -1316,12 +1322,12 @@ async function waitForOpenCodeRemoteAgentResult(
   const sessionSnapshot = getTerminalService().getSessionSnapshot(options.terminalOwner, options.terminalId);
   const opencodePort = sessionSnapshot?.cliPort ?? OPENCODE_TUI_PORT;
   const baseUrl = `http://127.0.0.1:${opencodePort}`;
-  const serverDeadline = Date.now() + 10_000; // 最多等 10 秒
+  const serverDeadline = Date.now() + 30_000; // 最多等 30 秒（兼容弱网/慢冷启动）
   let serverReady = false;
   while (Date.now() < serverDeadline) {
     throwIfRemoteAgentAborted(options.signal);
     try {
-      const healthRes = await fetch(`${baseUrl}/global/health`, { signal: AbortSignal.timeout(2_000) });
+      const healthRes = await fetch(`${baseUrl}/global/health`, { signal: AbortSignal.timeout(5_000) });
       if (healthRes.ok) {
         serverReady = true;
         break;
@@ -1332,7 +1338,7 @@ async function waitForOpenCodeRemoteAgentResult(
     await sleepWithAbort(500, options.signal);
   }
   if (!serverReady) {
-    throw new Error("OpenCode TUI HTTP server did not become ready within 10 seconds.");
+    throw new Error("OpenCode TUI HTTP server did not become ready within 30 seconds.");
   }
 
   // 3. 从已启动的 PTY session 的 launchConfig 中获取 prompt
@@ -2185,12 +2191,29 @@ async function handleRemoteUiInvoke(request: RemoteUiInvokeRequest): Promise<unk
       const workspacePath = store.getWorkspacePath(String(args[0] ?? ""));
       return workspacePath ? getFileDiff(workspacePath, String(args[1] ?? "")) : "";
     }
-    case desktopIpc.stageFile: {
+    case desktopIpc.commitChanges: {
       const workspacePath = store.getWorkspacePath(String(args[0] ?? ""));
       if (!workspacePath) {
         throw new Error(`Unknown workspace: ${String(args[0] ?? "")}`);
       }
-      await stageFile(workspacePath, String(args[1] ?? ""));
+      const filePaths = Array.isArray(args[1]) ? args[1].map((filePath) => String(filePath)) : [];
+      await commitChanges(workspacePath, filePaths, String(args[2] ?? ""));
+      return undefined;
+    }
+    case desktopIpc.listRemoteBranches: {
+      const workspacePath = store.getWorkspacePath(String(args[0] ?? ""));
+      return workspacePath ? listRemoteBranches(workspacePath) : [];
+    }
+    case desktopIpc.pushRemoteBranch: {
+      const workspacePath = store.getWorkspacePath(String(args[0] ?? ""));
+      if (!workspacePath) {
+        throw new Error(`Unknown workspace: ${String(args[0] ?? "")}`);
+      }
+      await pushRemoteBranch(
+        workspacePath,
+        String(args[1] ?? ""),
+        String(args[2] ?? ""),
+      );
       return undefined;
     }
     case desktopIpc.terminalEnsurePanel:
@@ -2854,13 +2877,30 @@ app.whenReady().then(async () => {
     }
     return getFileDiff(workspacePath, filePath);
   });
-  ipcMain.handle(desktopIpc.stageFile, async (_event, workspaceId: string, filePath: string) => {
+  ipcMain.handle(
+    desktopIpc.commitChanges,
+    async (_event, workspaceId: string, filePaths: readonly string[], message: string) => {
+      const workspacePath = store.getWorkspacePath(workspaceId);
+      if (!workspacePath) {
+        throw new Error(`Unknown workspace: ${workspaceId}`);
+      }
+      await commitChanges(workspacePath, filePaths, message);
+    },
+  );
+  ipcMain.handle(desktopIpc.listRemoteBranches, async (_event, workspaceId: string) => {
     const workspacePath = store.getWorkspacePath(workspaceId);
-    if (!workspacePath) {
-      throw new Error(`Unknown workspace: ${workspaceId}`);
-    }
-    await stageFile(workspacePath, filePath);
+    return workspacePath ? listRemoteBranches(workspacePath) : [];
   });
+  ipcMain.handle(
+    desktopIpc.pushRemoteBranch,
+    async (_event, workspaceId: string, remote: string, branch: string) => {
+      const workspacePath = store.getWorkspacePath(workspaceId);
+      if (!workspacePath) {
+        throw new Error(`Unknown workspace: ${workspaceId}`);
+      }
+      await pushRemoteBranch(workspacePath, remote, branch);
+    },
+  );
   ipcMain.handle(desktopIpc.toggleWindowMaximize, (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (!window) {

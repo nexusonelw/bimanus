@@ -114,7 +114,9 @@ export const desktopIpc = {
   listWorkspaceFiles: "pi-gui:list-workspace-files",
   getChangedFiles: "pi-gui:get-changed-files",
   getFileDiff: "pi-gui:get-file-diff",
-  stageFile: "pi-gui:stage-file",
+  commitChanges: "pi-gui:commit-changes",
+  listRemoteBranches: "pi-gui:list-remote-branches",
+  pushRemoteBranch: "pi-gui:push-remote-branch",
   getThemeMode: "pi-gui:get-theme-mode",
   getResolvedTheme: "pi-gui:get-resolved-theme",
   setThemeMode: "pi-gui:set-theme-mode",
@@ -438,9 +440,11 @@ export interface PiDesktopApi {
     options?: NavigateSessionTreeOptions,
   ): Promise<{ readonly state: DesktopAppState; readonly result: NavigateSessionTreeResult }>;
   listWorkspaceFiles(workspaceId: string): Promise<string[]>;
-  getChangedFiles(workspaceId: string): Promise<{ path: string; status: "added" | "modified" | "deleted" | "untracked"; staged: boolean }[]>;
+  getChangedFiles(workspaceId: string): Promise<{ path: string; status: "added" | "modified" | "deleted" | "untracked" }[]>;
   getFileDiff(workspaceId: string, filePath: string): Promise<string>;
-  stageFile(workspaceId: string, filePath: string): Promise<void>;
+  commitChanges(workspaceId: string, filePaths: readonly string[], message: string): Promise<void>;
+  listRemoteBranches(workspaceId: string): Promise<{ remote: string; branch: string }[]>;
+  pushRemoteBranch(workspaceId: string, remote: string, branch: string): Promise<void>;
   toggleWindowMaximize(): Promise<void>;
   openExternal(url: string): Promise<void>;
   getThemeMode(): Promise<"system" | "light" | "dark">;

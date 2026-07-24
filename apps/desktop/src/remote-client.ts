@@ -382,12 +382,17 @@ function installRemoteClient(): void {
       ),
     listWorkspaceFiles: (workspaceId: string) => invoke<string[]>(desktopIpc.listWorkspaceFiles, workspaceId),
     getChangedFiles: (workspaceId: string) =>
-      invoke<{ path: string; status: "added" | "modified" | "deleted" | "untracked"; staged: boolean }[]>(
+      invoke<{ path: string; status: "added" | "modified" | "deleted" | "untracked" }[]>(
         desktopIpc.getChangedFiles,
         workspaceId,
       ),
     getFileDiff: (workspaceId: string, filePath: string) => invoke<string>(desktopIpc.getFileDiff, workspaceId, filePath),
-    stageFile: (workspaceId: string, filePath: string) => invoke<void>(desktopIpc.stageFile, workspaceId, filePath),
+    commitChanges: (workspaceId: string, filePaths: readonly string[], message: string) =>
+      invoke<void>(desktopIpc.commitChanges, workspaceId, filePaths, message),
+    listRemoteBranches: (workspaceId: string) =>
+      invoke<{ remote: string; branch: string }[]>(desktopIpc.listRemoteBranches, workspaceId),
+    pushRemoteBranch: (workspaceId: string, remote: string, branch: string) =>
+      invoke<void>(desktopIpc.pushRemoteBranch, workspaceId, remote, branch),
     toggleWindowMaximize: () => Promise.resolve(),
     // In browser (remote-UI) mode the native Electron copy menu is not
     // available. The call should never be reached because platform-env guards

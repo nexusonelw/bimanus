@@ -4,7 +4,6 @@ import { promisify } from "node:util";
 import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import type { SessionDriverEvent, SessionRef } from "@bimanus/session-driver";
-import { reviewedFilesKey } from "../../src/reviewed-files-store";
 import {
   commitAllInGitRepo,
   createNamedThread,
@@ -19,9 +18,13 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-async function commitFiles(workspacePath: string, paths: readonly string[], message: string): Promise<void> {
-  await execFileAsync("git", ["add", "--", ...paths], { cwd: workspacePath });
-  await execFileAsync("git", ["commit", "-m", message], { cwd: workspacePath });
+async function latestCommitFiles(workspacePath: string): Promise<string[]> {
+  const { stdout } = await execFileAsync(
+    "git",
+    ["show", "--pretty=format:", "--name-only", "HEAD"],
+    { cwd: workspacePath },
+  );
+  return stdout.split("\n").map((filePath) => filePath.trim()).filter(Boolean);
 }
 
 async function selectedSessionRef(window: Page): Promise<SessionRef> {
@@ -102,68 +105,35 @@ test("syntax-highlights known languages and leaves unknown extensions plain", as
   }
 });
 
-test("reviewed checkboxes update counter, prune on changes, and survive relaunch", async () => {
+test("commits individually selected files or all remaining changes", async () => {
   test.setTimeout(60_000);
-  const { harness, window: firstWindow, userDataDir, workspacePath } = await launchSeeded(
-    "Review UX checkboxes",
-  );
-  const sessionRef = await selectedSessionRef(firstWindow);
-  const storageKey = reviewedFilesKey(sessionRef.workspaceId, sessionRef.sessionId);
-
-  await firstWindow.keyboard.press(desktopShortcut("D"));
-  const diffPanel = firstWindow.locator(".diff-panel");
-  await expect(diffPanel).toBeVisible();
-  await expect(diffPanel.locator(".diff-panel__file")).toHaveCount(3);
-
-  const counter = diffPanel.getByTestId("diff-panel-counter");
-  await expect(counter).toHaveText("Reviewed 0 of 3");
-
-  await diffPanel.getByTestId("diff-panel-reviewed-src/foo.ts").check();
-  await expect(counter).toHaveText("Reviewed 1 of 3");
-  await expect(diffPanel.locator('.diff-panel__file[data-file-path="src/foo.ts"]')).toHaveClass(
-    /diff-panel__file--reviewed/,
-  );
-
-  expect(
-    await firstWindow.evaluate((key) => globalThis.localStorage.getItem(key), storageKey),
-  ).toBe(JSON.stringify(["src/foo.ts"]));
-
-  await diffPanel.getByTestId("diff-panel-reviewed-src/foo.ts").uncheck();
-  await expect(counter).toHaveText("Reviewed 0 of 3");
-  await expect(
-    diffPanel.locator('.diff-panel__file[data-file-path="src/foo.ts"]'),
-  ).not.toHaveClass(/diff-panel__file--reviewed/);
-  expect(
-    await firstWindow.evaluate((key) => globalThis.localStorage.getItem(key), storageKey),
-  ).toBeNull();
-
-  await diffPanel.getByTestId("diff-panel-reviewed-src/foo.ts").check();
-  await diffPanel.getByTestId("diff-panel-reviewed-script.py").check();
-  await expect(counter).toHaveText("Reviewed 2 of 3");
-
-  await harness.close();
-
-  const reopened = await launchDesktop(userDataDir, { testMode: "background" });
-  const window = await reopened.firstWindow();
+  const { harness, window, workspacePath } = await launchSeeded("Review UX commit");
   try {
     await window.keyboard.press(desktopShortcut("D"));
-    const reopenedPanel = window.locator(".diff-panel");
-    await expect(reopenedPanel).toBeVisible();
-    await expect(reopenedPanel.getByTestId("diff-panel-counter")).toHaveText("Reviewed 2 of 3");
-    await expect(reopenedPanel.getByTestId("diff-panel-reviewed-src/foo.ts")).toBeChecked();
-    await expect(reopenedPanel.getByTestId("diff-panel-reviewed-script.py")).toBeChecked();
-    await expect(reopenedPanel.getByTestId("diff-panel-reviewed-notes.md")).not.toBeChecked();
+    const diffPanel = window.locator(".diff-panel");
+    await expect(diffPanel).toBeVisible();
+    await expect(diffPanel.locator(".diff-panel__file")).toHaveCount(3);
 
-    await commitFiles(workspacePath, ["src/foo.ts"], "land foo");
-    await reopenedPanel.locator('button[aria-label="Refresh"]').click();
-    await expect(reopenedPanel.locator(".diff-panel__file")).toHaveCount(2);
-    await expect(reopenedPanel.getByTestId("diff-panel-counter")).toHaveText("Reviewed 1 of 2");
+    await diffPanel.getByTestId("diff-panel-select-src/foo.ts").check();
+    await diffPanel.getByTestId("diff-panel-commit-message").fill("land foo");
+    await expect(diffPanel.getByTestId("diff-panel-commit")).toHaveText("Commit (1)");
+    await diffPanel.getByTestId("diff-panel-commit").click();
 
-    expect(
-      await window.evaluate((key) => globalThis.localStorage.getItem(key), storageKey),
-    ).toBe(JSON.stringify(["script.py"]));
+    await expect(diffPanel.locator(".diff-panel__file")).toHaveCount(2);
+    expect(await latestCommitFiles(workspacePath)).toEqual(["src/foo.ts"]);
+    await expect(diffPanel.locator('.diff-panel__file[data-file-path="script.py"]')).toBeVisible();
+    await expect(diffPanel.locator('.diff-panel__file[data-file-path="notes.md"]')).toBeVisible();
+
+    await diffPanel.getByTestId("diff-panel-select-all").check();
+    await expect(diffPanel.getByTestId("diff-panel-select-script.py")).toBeChecked();
+    await expect(diffPanel.getByTestId("diff-panel-select-notes.md")).toBeChecked();
+    await diffPanel.getByTestId("diff-panel-commit-message").fill("land remaining changes");
+    await diffPanel.getByTestId("diff-panel-commit").click();
+
+    await expect(diffPanel.locator(".diff-panel__file")).toHaveCount(0);
+    await expect(diffPanel).toContainText("No changes");
   } finally {
-    await reopened.close();
+    await harness.close();
   }
 });
 

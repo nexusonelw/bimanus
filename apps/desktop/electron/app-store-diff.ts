@@ -12,7 +12,11 @@ function validateFilePath(workspacePath: string, filePath: string): string {
 export interface ChangedFileEntry {
   readonly path: string;
   readonly status: "added" | "modified" | "deleted" | "untracked";
-  readonly staged: boolean;
+}
+
+export interface RemoteBranchEntry {
+  readonly remote: string;
+  readonly branch: string;
 }
 
 export function getChangedFiles(workspacePath: string): Promise<ChangedFileEntry[]> {
@@ -41,7 +45,6 @@ export function getChangedFiles(workspacePath: string): Promise<ChangedFileEntry
           entries.push({
             path: filePath,
             status: parseStatus(xy),
-            staged: isFullyStaged(xy),
           });
         }
         resolve(entries);
@@ -89,22 +92,95 @@ export function getFileDiff(workspacePath: string, filePath: string): Promise<st
   });
 }
 
-export function stageFile(workspacePath: string, filePath: string): Promise<void> {
-  validateFilePath(workspacePath, filePath);
-  return new Promise((resolve, reject) => {
-    execFile(
-      "git",
-      ["add", "--", filePath],
-      { cwd: workspacePath },
-      (error) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve();
-      },
-    );
-  });
+export async function commitChanges(
+  workspacePath: string,
+  filePaths: readonly string[],
+  message: string,
+): Promise<void> {
+  const normalizedMessage = message.trim();
+  if (!normalizedMessage) {
+    throw new Error("Commit message is required");
+  }
+
+  const normalizedPaths = [
+    ...new Set(filePaths.map((filePath) => validateFilePath(workspacePath, filePath))),
+  ];
+  if (normalizedPaths.length === 0) {
+    throw new Error("At least one changed file must be selected");
+  }
+
+  await runGit(workspacePath, ["add", "--", ...normalizedPaths]);
+  await runGit(workspacePath, [
+    "commit",
+    "--only",
+    "-m",
+    normalizedMessage,
+    "--",
+    ...normalizedPaths,
+  ]);
+}
+
+export async function listRemoteBranches(workspacePath: string): Promise<RemoteBranchEntry[]> {
+  const [remoteOutput, refOutput, currentBranchOutput] = await Promise.all([
+    runGitOutput(workspacePath, ["remote"]),
+    runGitOutput(workspacePath, [
+      "for-each-ref",
+      "--format=%(refname:short)",
+      "refs/remotes/",
+    ]),
+    runGitOutput(workspacePath, ["branch", "--show-current"]),
+  ]);
+  const remotes = remoteOutput.split("\n").map((remote) => remote.trim()).filter(Boolean);
+  if (remotes.length === 0) {
+    return [];
+  }
+
+  const entries: RemoteBranchEntry[] = [];
+  const seen = new Set<string>();
+  const remotesByLength = [...remotes].sort((left, right) => right.length - left.length);
+  const addEntry = (remote: string, branch: string) => {
+    const key = `${remote}\0${branch}`;
+    if (!branch || branch === "HEAD" || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    entries.push({ remote, branch });
+  };
+
+  for (const ref of refOutput.split("\n").map((value) => value.trim()).filter(Boolean)) {
+    const remote = remotesByLength.find((candidate) => ref.startsWith(`${candidate}/`));
+    if (remote) {
+      addEntry(remote, ref.slice(remote.length + 1));
+    }
+  }
+
+  const currentBranch = currentBranchOutput.trim();
+  if (currentBranch) {
+    for (const remote of remotes) {
+      addEntry(remote, currentBranch);
+    }
+  }
+
+  return entries.sort((left, right) =>
+    left.remote.localeCompare(right.remote) || left.branch.localeCompare(right.branch),
+  );
+}
+
+export async function pushRemoteBranch(
+  workspacePath: string,
+  remote: string,
+  branch: string,
+): Promise<void> {
+  const remotes = (await runGitOutput(workspacePath, ["remote"]))
+    .split("\n")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!remotes.includes(remote)) {
+    throw new Error(`Unknown Git remote: ${remote}`);
+  }
+
+  await runGit(workspacePath, ["check-ref-format", `refs/heads/${branch}`]);
+  await runGit(workspacePath, ["push", "--", remote, `HEAD:refs/heads/${branch}`]);
 }
 
 function parseStatus(xy: string): ChangedFileEntry["status"] {
@@ -123,9 +199,23 @@ function parseStatus(xy: string): ChangedFileEntry["status"] {
   return "modified";
 }
 
-function isFullyStaged(xy: string): boolean {
-  const x = xy[0] ?? " ";
-  const y = xy[1] ?? " ";
-  if (x === "?" || x === " ") return false;
-  return y === " ";
+function runGit(workspacePath: string, args: readonly string[]): Promise<void> {
+  return runGitOutput(workspacePath, args).then(() => undefined);
+}
+
+function runGitOutput(workspacePath: string, args: readonly string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      "git",
+      [...args],
+      { cwd: workspacePath, maxBuffer: 2 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(stderr.trim() || error.message));
+          return;
+        }
+        resolve(stdout);
+      },
+    );
+  });
 }

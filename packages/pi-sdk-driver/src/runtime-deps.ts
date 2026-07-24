@@ -98,16 +98,19 @@ function resolveBundledNpmCliPath(runtimeDir: string): string | undefined {
 }
 
 export function withDesktopBundledRuntimeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const runtime = resolveDesktopBundledNodeRuntime();
-  if (!runtime) {
-    return withDesktopMacPathFallbacks(env);
-  }
-
   const nextEnv: NodeJS.ProcessEnv = {
     ...env,
-    [PI_GUI_NODE_PATH_ENV]: runtime.nodePath,
-    ...(runtime.npmCliPath ? { [PI_GUI_NPM_CLI_PATH_ENV]: runtime.npmCliPath } : {}),
+    PI_SKIP_VERSION_CHECK: "1",
   };
+  const runtime = resolveDesktopBundledNodeRuntime();
+  if (!runtime) {
+    return withDesktopMacPathFallbacks(nextEnv);
+  }
+
+  nextEnv[PI_GUI_NODE_PATH_ENV] = runtime.nodePath;
+  if (runtime.npmCliPath) {
+    nextEnv[PI_GUI_NPM_CLI_PATH_ENV] = runtime.npmCliPath;
+  }
   prependEnvPathEntries(nextEnv, [runtime.runtimeDir]);
   // npm needs NODE_PATH to find its own internal modules (e.g. npm-prefix.js).
   appendNodePathEntries(nextEnv, [npmNodeModulesPath(runtime.runtimeDir)]);

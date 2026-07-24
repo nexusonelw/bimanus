@@ -1,13 +1,16 @@
 import { randomUUID } from "node:crypto";
+import { execFile } from "node:child_process";
 import { createReadStream, existsSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
+import { promisify } from "node:util";
 
 const maxJsonBodyBytes = 32 * 1024 * 1024;
 const executionDisconnectGraceMs = 30_000;
 const completedExecutionRetentionMs = 60_000;
+const execFileAsync = promisify(execFile);
 
 export interface RemoteUiClient {
   readonly id: string;
@@ -155,6 +158,34 @@ export class RemoteUiServer {
 
     if (url.pathname === "/api/health") {
       this.sendJson(response, 200, { ok: true });
+      return;
+    }
+
+    if (url.pathname === "/api/local-ping") {
+      if (request.method !== "GET") {
+        this.sendJson(response, 405, { ok: false, pong: false, error: "Method not allowed." });
+        return;
+      }
+      if (!isLoopbackAddress(request.socket.remoteAddress)) {
+        this.sendJson(response, 403, { ok: false, pong: false, error: "Local requests only." });
+        return;
+      }
+      const pid = Number(url.searchParams.get("pid"));
+      if (!Number.isSafeInteger(pid) || pid <= 0) {
+        this.sendJson(response, 400, { ok: false, pong: false, error: "A valid process ID is required." });
+        return;
+      }
+      if (!(await verifyProcessIsCaroClaw(pid))) {
+        this.sendJson(response, 403, { ok: false, pong: false, error: "Process verification failed." });
+        return;
+      }
+      this.sendJson(response, 200, {
+        ok: true,
+        pong: true,
+        host: this.options.host,
+        port: resolveListeningPort(this.server.address(), this.options.port),
+        token: this.options.getToken(),
+      });
       return;
     }
 
@@ -479,6 +510,34 @@ export class RemoteUiServer {
     response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     response.setHeader("Access-Control-Allow-Origin", "*");
     response.setHeader("Access-Control-Expose-Headers", "X-Execution-UUID");
+  }
+}
+
+function isLoopbackAddress(address: string | undefined): boolean {
+  return address === "localhost"
+    || address === "127.0.0.1"
+    || address === "::1"
+    || address === "::ffff:127.0.0.1";
+}
+
+async function verifyProcessIsCaroClaw(pid: number): Promise<boolean> {
+  try {
+    const { stdout } = process.platform === "win32"
+      ? await execFileAsync("powershell.exe", [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          `$process = Get-CimInstance Win32_Process -Filter \"ProcessId = ${pid}\"; if ($null -eq $process) { exit 1 }; [Console]::Out.Write($process.ExecutablePath + [Environment]::NewLine + $process.CommandLine)`,
+        ], { windowsHide: true, timeout: 3_000, maxBuffer: 64 * 1024 })
+      : await execFileAsync("ps", ["-p", String(pid), "-o", "comm=", "-o", "command="], {
+          timeout: 3_000,
+          maxBuffer: 64 * 1024,
+        });
+    const processCommand = stdout.trim();
+    return /caro[-_]claw/i.test(processCommand)
+      || /(?:^|[\\/])electron(?:\.exe)?(?:\s|$)/im.test(processCommand);
+  } catch {
+    return false;
   }
 }
 

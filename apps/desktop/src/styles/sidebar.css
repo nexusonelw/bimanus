@@ -38,10 +38,16 @@
 .sidebar {
   position: relative;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   background: var(--sidebar);
   border-right: 1px solid var(--line);
+}
+
+.sidebar__scroll {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .sidebar__resize-handle {
@@ -137,9 +143,6 @@
   cursor: default;
 }
 
-.sidebar__section {
-  overflow: auto;
-}
 
 .section__head {
   display: flex;
@@ -677,7 +680,7 @@
 @media (max-width: 768px) {
   /*
    * All mobile shells use horizontal scroll-snap paging.
-   * Pages (left→right): .sidebar → .main → .split-panel (if present).
+   * Pages (left→right): .sidebar → .main → .split-panel (if present) → .diff-panel (if present).
    * Users swipe / drag the scrollbar to navigate between pages.
    * The sidebar-toggle button is hidden on mobile — paging replaces it.
    */
@@ -724,7 +727,8 @@
   /* Every direct child of .shell becomes a full-viewport snap page. */
   .shell > .sidebar,
   .shell > .main,
-  .shell > .split-panel {
+  .shell > .split-panel,
+  .shell > .diff-panel {
     flex: 0 0 100% !important;
     width: 100% !important;
     min-width: 100% !important;
@@ -740,6 +744,10 @@
 
   .shell > .split-panel {
     display: flex;
+  }
+
+  .shell > .split-panel,
+  .shell > .diff-panel {
     border-left: none;
   }
 

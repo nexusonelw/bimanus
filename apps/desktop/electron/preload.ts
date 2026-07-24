@@ -283,11 +283,15 @@ contextBridge.exposeInMainWorld("piApp", {
   listWorkspaceFiles: (workspaceId: string) =>
     invokeIpc(desktopIpc.listWorkspaceFiles, workspaceId) as Promise<string[]>,
   getChangedFiles: (workspaceId: string) =>
-    invokeIpc(desktopIpc.getChangedFiles, workspaceId) as Promise<{ path: string; status: "added" | "modified" | "deleted" | "untracked"; staged: boolean }[]>,
+    invokeIpc(desktopIpc.getChangedFiles, workspaceId) as Promise<{ path: string; status: "added" | "modified" | "deleted" | "untracked" }[]>,
   getFileDiff: (workspaceId: string, filePath: string) =>
     invokeIpc(desktopIpc.getFileDiff, workspaceId, filePath) as Promise<string>,
-  stageFile: (workspaceId: string, filePath: string) =>
-    invokeIpc(desktopIpc.stageFile, workspaceId, filePath) as Promise<void>,
+  commitChanges: (workspaceId: string, filePaths: readonly string[], message: string) =>
+    invokeIpc(desktopIpc.commitChanges, workspaceId, filePaths, message) as Promise<void>,
+  listRemoteBranches: (workspaceId: string) =>
+    invokeIpc(desktopIpc.listRemoteBranches, workspaceId) as Promise<{ remote: string; branch: string }[]>,
+  pushRemoteBranch: (workspaceId: string, remote: string, branch: string) =>
+    invokeIpc(desktopIpc.pushRemoteBranch, workspaceId, remote, branch) as Promise<void>,
   toggleWindowMaximize: () => invokeIpc(desktopIpc.toggleWindowMaximize) as Promise<void>,
   openExternal: (url: string) => invokeIpc(desktopIpc.openExternal, url) as Promise<void>,
   getThemeMode: () => invokeIpc(desktopIpc.getThemeMode) as Promise<"system" | "light" | "dark">,

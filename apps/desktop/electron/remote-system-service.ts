@@ -23,11 +23,24 @@ type ShellTask = {
   truncated: boolean;
   status: "running" | "completed" | "killed";
   exitCode: number | null;
+  folderStats?: FolderStats;
   resolveExit: () => void;
   readonly exited: Promise<void>;
 };
 
 type FileEntry = { name: string; path: string; isDirectory: boolean; size: number };
+type FolderStats = {
+  path: string;
+  sizeMb: number;
+  fileCount: number;
+  latestUpdatedAt: string;
+  addedAt: string;
+};
+
+const SHELL_FILE_QUERY_COMMANDS = new Set([
+  "ls", "cat", "tail", "head", "find", "grep", "rg", "ripgrep",
+  "stat", "du", "file", "wc", "tree", "locate", "sed", "awk",
+]);
 
 export class RemoteSystemService {
   private readonly osCheckedClients = new Set<string>();
@@ -63,21 +76,25 @@ export class RemoteSystemService {
       case "get-directory-tree": {
         const budget = createOutputBudget();
         const excludedGlobs = globList(input.exclude, "exclude");
-        const result = {
-          path: targetPath,
-          tree: await readTree(
+        const [folderStats, tree] = await Promise.all([
+          getFolderStats(targetPath),
+          readTree(
             targetPath,
             targetPath,
             numberAtLeast(input.depth, 0, Number.MAX_SAFE_INTEGER),
             budget,
             excludedGlobs,
           ),
-        };
+        ]);
+        const result = { folderStats, path: targetPath, tree };
         return limitResult(result, budget.truncated);
       }
       case "read-file": {
-        const file = await readTextPrefix(targetPath);
-        const result = { path: targetPath, content: file.content };
+        const [file, folderStats] = await Promise.all([
+          readTextPrefix(targetPath),
+          getFolderStats(targetPath),
+        ]);
+        const result = { folderStats, path: targetPath, content: file.content };
         return limitResult(result, file.truncated);
       }
       case "get-import-files-metadata":
@@ -117,6 +134,7 @@ export class RemoteSystemService {
         const lines: string[] = [];
         let outputChars = 0;
         let truncated = false;
+        const folderStatsPromise = getFolderStats(targetPath);
         await scanFileLines(targetPath, (text, lineNumber) => {
           if (lineNumber < start) return true;
           if (lineNumber > end) return false;
@@ -130,16 +148,28 @@ export class RemoteSystemService {
           outputChars += nextChars;
           return true;
         });
-        const result = { path: targetPath, lineNum, offset, content: lines.join("\n") };
+        const result = {
+          folderStats: await folderStatsPromise,
+          path: targetPath,
+          lineNum,
+          offset,
+          content: lines.join("\n"),
+        };
         return limitResult(result, truncated);
       }
       case "find-files": {
-        const found = await findFiles(targetPath, input);
-        return limitResult(found.result, found.truncated);
+        const [found, folderStats] = await Promise.all([
+          findFiles(targetPath, input),
+          getFolderStats(targetPath),
+        ]);
+        return limitResult({ folderStats, ...found.result }, found.truncated);
       }
       case "grep-files": {
-        const found = await grepFiles(targetPath, input);
-        return limitResult(found.result, found.truncated);
+        const [found, folderStats] = await Promise.all([
+          grepFiles(targetPath, input),
+          getFolderStats(targetPath),
+        ]);
+        return limitResult({ folderStats, ...found.result }, found.truncated);
       }
       case "write-file": {
         if (typeof input.content !== "string") throw new Error("'content' is required and must be a string.");
@@ -187,6 +217,7 @@ export class RemoteSystemService {
     const input = asObject(rawInput);
     const cwd = await resolveRoot(input.cwd, "cwd");
     const command = requiredString(input.command, "command");
+    const includeFolderStats = isShellFileQuery(command);
     const taskId = crypto.randomUUID();
     const child = spawn(command, {
       cwd,
@@ -216,9 +247,12 @@ export class RemoteSystemService {
     child.stderr?.on("data", append);
     child.once("error", (error) => append(`${error.message}\n`));
     child.once("exit", (code) => {
-      task.exitCode = code;
-      if (task.status === "running") task.status = "completed";
-      task.resolveExit();
+      void (async () => {
+        task.exitCode = code;
+        if (task.status === "running") task.status = "completed";
+        if (includeFolderStats) task.folderStats = await getFolderStats(cwd);
+        task.resolveExit();
+      })();
     });
     await waitForTask(task, numberAtLeast(input.waitMs, 0, 30_000));
     return shellTaskResult(taskId, task);
@@ -323,6 +357,53 @@ async function resolveWritableTarget(value: unknown): Promise<string> {
 
 function isHidden(targetPath: string, rootPath: string): boolean {
   return path.relative(rootPath, targetPath).split(path.sep).some((part) => part.startsWith("."));
+}
+
+function isShellFileQuery(command: string): boolean {
+  const commandName = command.trim().split(/\s+/, 1)[0]?.split(/[\\/]/).pop()?.toLowerCase();
+  return Boolean(commandName && SHELL_FILE_QUERY_COMMANDS.has(commandName));
+}
+
+async function getFolderStats(targetPath: string): Promise<FolderStats> {
+  const targetStats = await lstat(targetPath).catch(() => null);
+  const folderPath = targetStats && !targetStats.isDirectory() ? path.dirname(targetPath) : targetPath;
+  let totalBytes = 0;
+  let fileCount = 0;
+  let latestUpdatedAt = 0;
+  let addedAt = Number.POSITIVE_INFINITY;
+
+  const visit = async (dirPath: string): Promise<void> => {
+    const entries = await readdir(dirPath, { withFileTypes: true }).catch(() => []);
+    await Promise.all(entries.map(async (entry) => {
+      if (entry.name.startsWith(".")) return;
+      const entryPath = path.join(dirPath, entry.name);
+      try {
+        if (entry.isDirectory()) {
+          await visit(entryPath);
+          return;
+        }
+        const stats = await lstat(entryPath);
+        if (!stats.isFile()) return;
+        fileCount += 1;
+        totalBytes += stats.size;
+        latestUpdatedAt = Math.max(latestUpdatedAt, stats.mtimeMs);
+        const createdAt = stats.birthtimeMs > 0 ? stats.birthtimeMs : stats.ctimeMs;
+        if (createdAt > 0) addedAt = Math.min(addedAt, createdAt);
+      } catch {
+        // Ignore files that cannot be inspected while collecting folder metadata.
+      }
+    }));
+  };
+
+  await visit(folderPath);
+  const fallbackTime = Date.now();
+  return {
+    path: folderPath,
+    sizeMb: Number((totalBytes / (1024 * 1024)).toFixed(2)),
+    fileCount,
+    latestUpdatedAt: new Date(latestUpdatedAt || fallbackTime).toISOString(),
+    addedAt: new Date(Number.isFinite(addedAt) ? addedAt : fallbackTime).toISOString(),
+  };
 }
 
 async function collectImportFilesMetadata(value: unknown) {
@@ -688,7 +769,12 @@ async function waitForTask(task: ShellTask, waitMs: number): Promise<void> {
 }
 
 function shellTaskResult(taskId: string, task: ShellTask) {
-  return boundedOutputResult({ taskId, status: task.status, exitCode: task.exitCode }, task.output, task.truncated);
+  return boundedOutputResult({
+    taskId,
+    status: task.status,
+    exitCode: task.exitCode,
+    ...(task.folderStats ? { folderStats: task.folderStats } : {}),
+  }, task.output, task.truncated);
 }
 
 function boundedOutputResult<T extends Record<string, unknown>>(base: T, value: string, forced: boolean) {

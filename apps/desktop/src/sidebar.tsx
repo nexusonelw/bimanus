@@ -155,6 +155,7 @@ export function Sidebar(props: SidebarProps) {
           onToggle={onToggleSidebar!}
         />
       ) : null}
+      <div className="sidebar__scroll">
       <div className="sidebar__top">
         <button
           className="sidebar__new"
@@ -300,6 +301,7 @@ export function Sidebar(props: SidebarProps) {
           </button>
         </div>
       ) : null}
+      </div>
       <div
         aria-label={t("sidebar.resize")}
         aria-orientation="vertical"

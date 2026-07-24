@@ -21,7 +21,11 @@ import { useI18n } from "./i18n";
 
 const MIN_TERMINAL_HEIGHT = 220;
 const DEFAULT_TERMINAL_HEIGHT = 340;
-const PI_TUI_STARTUP_TIMEOUT_MS = 8_000;
+const PI_TUI_STARTUP_TIMEOUT_MS_LOCAL = 8_000;
+const PI_TUI_STARTUP_TIMEOUT_MS_REMOTE = 45_000;
+function resolvePiTuiStartupTimeoutMs(): number {
+  return isElectronHost() ? PI_TUI_STARTUP_TIMEOUT_MS_LOCAL : PI_TUI_STARTUP_TIMEOUT_MS_REMOTE;
+}
 // ponytail: terminal tab metadata may lag by 50ms; lower this only if UI chrome needs fresher replay state.
 const TERMINAL_PANEL_STATE_FLUSH_MS = 50;
 
@@ -149,6 +153,7 @@ export function TerminalPanel({
   // may have grown. Bumping this epoch ensures the attach-session effect
   // re-runs and writes the up-to-date replay into the xterm instance.
   const [panelEpoch, setPanelEpoch] = useState(0);
+  const [retryEpoch, setRetryEpoch] = useState(0);
   const lastSizeRef = useRef<TerminalSize>({ cols: 80, rows: 24 });
   const resizeCleanupRef = useRef<(() => void) | null>(null);
   const [panel, setPanel] = useState<TerminalPanelSnapshot | null>(null);
@@ -301,6 +306,7 @@ export function TerminalPanel({
     }
 
     const terminalId = activeSessionId;
+    const startupTimeoutMs = resolvePiTuiStartupTimeoutMs();
     tuiStartupTimeoutRef.current = window.setTimeout(() => {
       const currentSession = panelSnapshotRef.current?.sessions.find((session) => session.id === terminalId);
       const visibleText = containerRef.current?.querySelector(".xterm-rows")?.textContent ?? "";
@@ -313,9 +319,9 @@ export function TerminalPanel({
         return;
       }
       if (currentSession.status === "running" || currentSession.status === "exited" || currentSession.status === "error") {
-        setError(t("terminal.timeout", { seconds: Math.round(PI_TUI_STARTUP_TIMEOUT_MS / 1000) }));
+        setError(t("terminal.timeout", { seconds: Math.round(startupTimeoutMs / 1000) }));
       }
-    }, PI_TUI_STARTUP_TIMEOUT_MS);
+    }, startupTimeoutMs);
 
     return () => {
       if (tuiStartupTimeoutRef.current !== null) {
@@ -377,7 +383,7 @@ export function TerminalPanel({
     return () => {
       active = false;
     };
-  }, [requestPanel, reattachEpoch]);
+  }, [requestPanel, reattachEpoch, retryEpoch]);
 
   const createTerminal = useCallback(async (nextLaunchConfig = latestLaunchConfigRef.current) => {
     if (!api) {
@@ -1121,7 +1127,23 @@ export function TerminalPanel({
       </div>
       ) : null}
       {error ? (
-        <div className="terminal-panel__error">{error}</div>
+        <div className="terminal-panel__error">
+          <span className="terminal-panel__error-text">{error}</span>
+          <button
+            type="button"
+            className="icon-button terminal-panel__error-retry"
+            title={t("terminal.timeoutRetry")}
+            aria-label={t("terminal.timeoutRetry")}
+            onClick={() => {
+              hasVisibleTerminalOutputRef.current = false;
+              terminalRef.current?.reset();
+              setError("");
+              setRetryEpoch((e) => e + 1);
+            }}
+          >
+            <RefreshIcon />
+          </button>
+        </div>
       ) : (
         <div className="terminal-panel__viewport" ref={containerRef} />
       )}
