@@ -119,6 +119,54 @@ bimanus
 bimanus --headless
 ```
 
+### 开机自启（systemd）
+
+安装脚本默认会注册并启用 systemd 服务（可用 `--no-autostart` 关闭）：
+
+- root 安装：`/etc/systemd/system/bimanus.service`（`systemctl enable --now bimanus`）
+- 普通用户：`~/.config/systemd/user/bimanus.service`（`systemctl --user enable --now bimanus`，并尝试 `loginctl enable-linger`）
+
+常用命令：
+
+```bash
+# root
+systemctl status bimanus
+systemctl restart bimanus
+journalctl -u bimanus -f
+
+# 普通用户
+systemctl --user status bimanus
+systemctl --user restart bimanus
+journalctl --user -u bimanus -f
+```
+
+若已经装好、只想补开机自启（root 示例）：
+
+```bash
+cat >/etc/systemd/system/bimanus.service <<'EOF'
+[Unit]
+Description=Bimanus headless remote UI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/root/.local/bin/bimanus --headless
+Restart=on-failure
+RestartSec=5
+Environment=HOME=/root
+Environment=PI_APP_HEADLESS=1
+EnvironmentFile=-/root/.local/opt/bimanus/remote-ui.env
+Environment=TMPDIR=/tmp
+WorkingDirectory=/root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable --now bimanus
+```
+
 无 `DISPLAY` 的机器上，安装脚本会默认写入 `PI_APP_HEADLESS=1`。  
 **headless 不会重新实现远程访问**，只是不创建本地窗口，继续使用项目已有的 Remote UI。
 

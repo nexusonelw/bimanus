@@ -119,6 +119,52 @@ bimanus
 bimanus --headless
 ```
 
+### Boot autostart (systemd)
+
+The installer enables a systemd service by default (disable with `--no-autostart`):
+
+- root install: `/etc/systemd/system/bimanus.service`
+- user install: `~/.config/systemd/user/bimanus.service` (+ `loginctl enable-linger` when possible)
+
+```bash
+# root
+systemctl status bimanus
+systemctl restart bimanus
+journalctl -u bimanus -f
+
+# user
+systemctl --user status bimanus
+systemctl --user restart bimanus
+journalctl --user -u bimanus -f
+```
+
+If already installed and you only need autostart (root example):
+
+```bash
+cat >/etc/systemd/system/bimanus.service <<'EOF'
+[Unit]
+Description=Bimanus headless remote UI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/root/.local/bin/bimanus --headless
+Restart=on-failure
+RestartSec=5
+Environment=HOME=/root
+Environment=PI_APP_HEADLESS=1
+EnvironmentFile=-/root/.local/opt/bimanus/remote-ui.env
+Environment=TMPDIR=/tmp
+WorkingDirectory=/root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable --now bimanus
+```
+
 On machines without `DISPLAY`, the installer writes `PI_APP_HEADLESS=1` by default.  
 **Headless does not re-implement remote access** — it only skips the local BrowserWindow and keeps using the existing Remote UI bridge.
 

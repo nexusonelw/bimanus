@@ -25,6 +25,8 @@
 #   --install-dir <dir>  AppImage install dir (default: ~/.local/opt/bimanus)
 #   --bin-dir <dir>      Launcher dir (default: ~/.local/bin)
 #   --no-start           Do not print a start hint that implies launching now
+#   --no-autostart       Do not install systemd boot service
+#   --autostart          Force install systemd boot service (default)
 #   --yes / -y           Accept defaults without interactive prompts
 #   --help               Show help
 #
@@ -55,6 +57,9 @@ TOKEN="${BIMANUS_REMOTE_UI_TOKEN:-${BIMANUS_REMOTE_UI_PASSWORD:-}}"
 VERSION_TAG="${BIMANUS_VERSION:-}"
 ASSUME_YES=0
 NO_START=0
+ENABLE_AUTOSTART=1
+SERVICE_SCOPE=
+SERVICE_UNIT=
 
 bold() { printf '\033[1m%s\033[0m' "$*"; }
 info() { printf '  %s\n' "$*"; }
@@ -172,6 +177,12 @@ parse_args() {
         ;;
       --no-start)
         NO_START=1; shift
+        ;;
+      --no-autostart)
+        ENABLE_AUTOSTART=0; shift
+        ;;
+      --autostart)
+        ENABLE_AUTOSTART=1; shift
         ;;
       *)
         die "Unknown argument: $1 (try --help)"
@@ -479,6 +490,93 @@ LAUNCHER_EOF
   chmod 755 "$launcher"
 }
 
+
+systemd_available() {
+  command -v systemctl >/dev/null 2>&1 || return 1
+  [[ -d /run/systemd/system ]] || return 1
+  return 0
+}
+
+install_systemd_service() {
+  local launcher="$1"
+  local env_file="$2"
+  SERVICE_SCOPE=""
+  SERVICE_UNIT=""
+
+  if [[ "$ENABLE_AUTOSTART" -ne 1 ]]; then
+    info "Autostart disabled (--no-autostart)."
+    return 0
+  fi
+  if ! systemd_available; then
+    info "systemd not detected; skip boot autostart."
+    info "Start manually: $launcher"
+    return 0
+  fi
+
+  local unit_dir unit_path wanted_by scope_flag
+  if [[ "$(id -u)" -eq 0 ]]; then
+    SERVICE_SCOPE="system"
+    unit_dir="/etc/systemd/system"
+    unit_path="${unit_dir}/bimanus.service"
+    wanted_by="multi-user.target"
+    scope_flag=""
+  else
+    SERVICE_SCOPE="user"
+    unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+    unit_path="${unit_dir}/bimanus.service"
+    wanted_by="default.target"
+    scope_flag="--user"
+  fi
+  SERVICE_UNIT="$unit_path"
+  mkdir -p "$unit_dir"
+
+  cat > "$unit_path" <<EOF
+[Unit]
+Description=Bimanus headless remote UI
+Documentation=https://github.com/nexusonelw/bimanus
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=${launcher} --headless
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillMode=control-group
+Environment=HOME=${HOME}
+Environment=PI_APP_HEADLESS=1
+EnvironmentFile=-${env_file}
+# AppImage needs a writable temp dir
+Environment=TMPDIR=/tmp
+WorkingDirectory=${HOME}
+
+[Install]
+WantedBy=${wanted_by}
+EOF
+  chmod 644 "$unit_path"
+
+  if [[ "$SERVICE_SCOPE" == "system" ]]; then
+    systemctl daemon-reload
+    systemctl enable bimanus.service
+    systemctl restart bimanus.service || systemctl start bimanus.service
+    info "systemd system service enabled: bimanus.service"
+    info "  systemctl status bimanus"
+    info "  journalctl -u bimanus -f"
+  else
+    systemctl --user daemon-reload
+    systemctl --user enable bimanus.service
+    systemctl --user restart bimanus.service || systemctl --user start bimanus.service
+    # Allow user service to start at boot without interactive login.
+    if command -v loginctl >/dev/null 2>&1; then
+      loginctl enable-linger "$(id -un)" >/dev/null 2>&1 || true
+    fi
+    info "systemd user service enabled: bimanus.service"
+    info "  systemctl --user status bimanus"
+    info "  journalctl --user -u bimanus -f"
+  fi
+}
+
 merge_ui_state() {
   local state_file="$1"
   mkdir -p "$(dirname "$state_file")"
@@ -627,6 +725,10 @@ main() {
 
   local desktop_file="${XDG_DATA_HOME:-$HOME/.local/share}/applications/bimanus.desktop"
   write_desktop_entry "$desktop_file" "$launcher" ""
+
+  step "Configuring boot autostart"
+  install_systemd_service "$launcher" "$env_file"
+
   cat > "$meta_file" <<EOF
 install_dir=${INSTALL_DIR}
 bin_dir=${BIN_DIR}
@@ -636,6 +738,9 @@ config_dir=${CONFIG_DIR}
 arch=${arch}
 release_tag=${tag_name}
 asset_name=${asset_name}
+service_scope=${SERVICE_SCOPE}
+service_unit=${SERVICE_UNIT}
+autostart=${ENABLE_AUTOSTART}
 installed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
 
@@ -651,6 +756,9 @@ EOF
   info "Config:    $env_file"
   info "UI state:  ${CONFIG_DIR}/ui-state.json"
   info "Desktop:   $desktop_file"
+  if [[ -n "${SERVICE_UNIT:-}" ]]; then
+    info "Service:   $SERVICE_UNIT ($SERVICE_SCOPE)"
+  fi
   printf '\n'
   info "$(bold "Remote access")"
   info "Host IP:   $lan_ip"
@@ -662,6 +770,17 @@ EOF
   info "  export PATH=\"${BIN_DIR}:\$PATH\"   # add to ~/.bashrc to make permanent"
   info "  bimanus"
   info "  # equivalent: bimanus --headless"
+  if [[ "${SERVICE_SCOPE:-}" == "system" ]]; then
+    info "Boot autostart: enabled (systemd system service bimanus)"
+    info "  systemctl status bimanus"
+    info "  systemctl restart bimanus"
+  elif [[ "${SERVICE_SCOPE:-}" == "user" ]]; then
+    info "Boot autostart: enabled (systemd user service bimanus)"
+    info "  systemctl --user status bimanus"
+    info "  systemctl --user restart bimanus"
+  else
+    info "Boot autostart: not configured"
+  fi
   printf '\n'
   info "Override at launch (optional):"
   info "  bimanus --headless --remote-ui-port 43174 --remote-ui-token 'secret'"

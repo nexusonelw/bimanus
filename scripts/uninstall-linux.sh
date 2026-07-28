@@ -32,6 +32,8 @@ LAUNCHER="${BIN_DIR}/bimanus"
 META_FILE="${INSTALL_DIR}/.bimanus-install-meta"
 ASSUME_YES=0
 PURGE=0
+SERVICE_UNIT=
+SERVICE_SCOPE=
 
 bold() { printf '\033[1m%s\033[0m' "$*"; }
 info() { printf '  %s\n' "$*"; }
@@ -77,6 +79,8 @@ load_meta() {
       desktop_file) DESKTOP_FILE="$value" ;;
       config_dir) CONFIG_DIR="$value" ;;
       bin_dir) BIN_DIR="$value" ;;
+      service_unit) SERVICE_UNIT="$value" ;;
+      service_scope) SERVICE_SCOPE="$value" ;;
     esac
   done < "$META_FILE"
   META_FILE="${INSTALL_DIR}/.bimanus-install-meta"
@@ -117,6 +121,42 @@ parse_args() {
         ;;
     esac
   done
+}
+
+
+remove_systemd_service() {
+  local unit_path="${SERVICE_UNIT:-}"
+  local scope="${SERVICE_SCOPE:-}"
+
+  # Fallbacks when meta is missing.
+  if [[ -z "$unit_path" ]]; then
+    if [[ "$(id -u)" -eq 0 && -f /etc/systemd/system/bimanus.service ]]; then
+      unit_path="/etc/systemd/system/bimanus.service"
+      scope="system"
+    elif [[ -f "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/bimanus.service" ]]; then
+      unit_path="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/bimanus.service"
+      scope="user"
+    fi
+  fi
+  if [[ -z "$unit_path" ]]; then
+    info "No systemd unit recorded; skip service removal."
+    return 0
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    if [[ "$scope" == "system" ]] || [[ "$unit_path" == /etc/systemd/system/* ]]; then
+      systemctl stop bimanus.service 2>/dev/null || true
+      systemctl disable bimanus.service 2>/dev/null || true
+      systemctl daemon-reload 2>/dev/null || true
+      info "Disabled system service bimanus.service"
+    else
+      systemctl --user stop bimanus.service 2>/dev/null || true
+      systemctl --user disable bimanus.service 2>/dev/null || true
+      systemctl --user daemon-reload 2>/dev/null || true
+      info "Disabled user service bimanus.service"
+    fi
+  fi
+  remove_path "$unit_path"
 }
 
 remove_path() {
@@ -173,6 +213,9 @@ main() {
       fi
     fi
   fi
+
+  step "Removing boot autostart service"
+  remove_systemd_service
 
   step "Stopping running Bimanus processes (best-effort)"
   if command -v pkill >/dev/null 2>&1; then
