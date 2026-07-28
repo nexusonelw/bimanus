@@ -1,7 +1,7 @@
 import type { RuntimeSnapshot } from "@bimanus/session-driver/runtime-types";
 import { buildModelOptions } from "./composer-commands";
 
-export type ModelOnboardingSettingsSection = "models" | "providers";
+export type ModelOnboardingSettingsSection = "providers";
 
 export interface ModelOnboardingNotice {
   readonly title: string;
@@ -56,7 +56,7 @@ export function deriveModelOnboardingState(
             title: "No models available",
             description: "All available models are currently disabled. Open Settings > Models to enable models.",
             actionLabel: "Open Settings > Models",
-            actionSection: "models",
+            actionSection: "providers",
           }
         : {
             title: "No models available",
@@ -80,7 +80,7 @@ export function deriveModelOnboardingState(
           ? "The model selected for this thread is no longer available. Choose another model, then open Settings > Models to update the default."
           : "The model selected for this thread is no longer available. Choose another model, then open Settings > Models to choose the app default.",
         actionLabel: "Open Settings > Models",
-        actionSection: "models",
+        actionSection: "providers",
       },
     };
   }
@@ -98,7 +98,7 @@ export function deriveModelOnboardingState(
             title: "No default model set",
             description: "Set a default model in Settings > Models.",
             actionLabel: "Open Settings > Models",
-            actionSection: "models",
+            actionSection: "providers",
           },
     };
   }
@@ -117,7 +117,7 @@ export function deriveModelOnboardingState(
           ? `Your saved default (${defaultLabel}) is no longer available. Open Settings > Models to update it.`
           : `Your saved default (${defaultLabel}) is no longer available. Choose a model for this thread, then open Settings > Models to update it.`,
         actionLabel: "Open Settings > Models",
-        actionSection: "models",
+        actionSection: "providers",
       },
     };
   }

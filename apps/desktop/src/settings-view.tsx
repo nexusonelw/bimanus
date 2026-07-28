@@ -1,4 +1,4 @@
-import type { RuntimeSettingsSnapshot, RuntimeSnapshot } from "@bimanus/session-driver/runtime-types";
+import type { RuntimeSnapshot } from "@bimanus/session-driver/runtime-types";
 import type { CliEnablementMap } from "./cli-enablement";
 import type { LocaleSetting, McpServerConfig, McpServerConfigInput, NotificationPreferences, RemoteUiStatus, WorkspaceRecord } from "./desktop-state";
 import type { CliDetectionMap, DesktopNotificationPermissionStatus } from "./ipc";
@@ -33,10 +33,7 @@ interface SettingsViewProps {
   readonly locale: LocaleSetting;
   readonly mcpServers: readonly McpServerConfig[];
   readonly cliEnablement: CliEnablementMap;
-  readonly onSetDefaultModel: (provider: string, modelId: string) => void;
-  readonly onSetThinkingLevel: (thinkingLevel: RuntimeSettingsSnapshot["defaultThinkingLevel"]) => void;
   readonly onToggleSkillCommands: (enabled: boolean) => void;
-  readonly onSetScopedModelPatterns: (patterns: readonly string[]) => void;
   readonly onLoginProvider: (providerId: string) => void;
   readonly onLogoutProvider: (providerId: string) => void;
   readonly onSetProviderApiKey: (providerId: string, apiKey: string) => Promise<string | undefined>;
@@ -81,10 +78,7 @@ export function SettingsView({
   locale,
   mcpServers,
   cliEnablement,
-  onSetDefaultModel,
-  onSetThinkingLevel,
   onToggleSkillCommands,
-  onSetScopedModelPatterns,
   onLoginProvider,
   onLogoutProvider,
   onSetProviderApiKey,
@@ -116,7 +110,6 @@ export function SettingsView({
     section !== "notifications" &&
     section !== "appearance" &&
     section !== "providers" &&
-    section !== "models" &&
     section !== "mcp" &&
     section !== "cli"
   ) {
@@ -183,15 +176,6 @@ export function SettingsView({
               onLogoutProvider={onLogoutProvider}
               onSetProviderApiKey={onSetProviderApiKey}
               onRemoveProviderApiKey={onRemoveProviderApiKey}
-            />
-          ) : null}
-
-          {section === "models" ? (
-            <SettingsModelsSection
-              runtime={runtime}
-              onSetDefaultModel={onSetDefaultModel}
-              onSetScopedModelPatterns={onSetScopedModelPatterns}
-              onSetThinkingLevel={onSetThinkingLevel}
             />
           ) : null}
 

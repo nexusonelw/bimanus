@@ -33,8 +33,6 @@ export function sectionTitle(section: SettingsSection, t?: TranslateFn): string 
       return t ? t("settings.section.appearance.title") : "Appearance";
     case "providers":
       return t ? t("settings.section.providers.title") : "Providers";
-    case "models":
-      return t ? t("settings.section.models.title") : "Models";
     case "mcp":
       return t ? t("settings.section.mcp.title") : "MCP";
     case "cli":
@@ -59,8 +57,6 @@ export function sectionDescription(section: SettingsSection, workspaceName: stri
       return workspaceName === "global settings"
         ? "Connect providers and manage global authentication for all workspaces."
         : `Connect providers and manage auth for ${workspaceName}.`;
-    case "models":
-      return t ? t("settings.section.models.description") : "Choose the default model and which models appear in pickers.";
     case "mcp":
       return t ? t("settings.section.mcp.description") : "Configure global HTTP MCP servers and OAuth authorization.";
     case "cli":

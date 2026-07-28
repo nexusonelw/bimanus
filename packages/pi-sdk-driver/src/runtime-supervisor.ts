@@ -102,9 +102,34 @@ export class RuntimeSupervisor implements RuntimeResourceDriver {
     this.authStorage.reload();
     this.modelRegistry.refresh();
     await context.resourceLoader.reload();
+    this.syncExtensionProviders(context);
     await this.repairBrokenNativePackages(context);
     await this.reconcileEnabledModelPatterns(context);
     return this.buildSnapshot(context);
+  }
+
+  /**
+   * Flush pending provider registrations from extensions (e.g. pi-grok-cli)
+   * into the shared model registry. Without this step, models registered by
+   * extension packages via pi.registerProvider() are invisible to the GUI
+   * runtime snapshot because RuntimeSupervisor does not go through
+   * createAgentSessionServices which normally performs this sync.
+   */
+  private syncExtensionProviders(context: RuntimeContext): void {
+    const extensionsResult = context.resourceLoader.getExtensions();
+    const pending = extensionsResult.runtime.pendingProviderRegistrations;
+    if (pending.length === 0) {
+      return;
+    }
+    for (const { name, config } of pending) {
+      try {
+        this.modelRegistry.registerProvider(name, config);
+      } catch {
+        // Ignore registration errors for individual providers; the extension
+        // diagnostics in buildExtensionRecords will surface load failures.
+      }
+    }
+    pending.length = 0;
   }
 
   async prepareRuntimeForExternalLaunch(workspace: WorkspaceRef): Promise<void> {
@@ -122,6 +147,7 @@ export class RuntimeSupervisor implements RuntimeResourceDriver {
     await this.authStorage.login(providerId, callbacks);
     this.modelRegistry.refresh();
     await context.resourceLoader.reload();
+    this.syncExtensionProviders(context);
     await this.reconcileEnabledModelPatterns(context, [providerId]);
     return this.buildSnapshot(context);
   }
@@ -131,6 +157,7 @@ export class RuntimeSupervisor implements RuntimeResourceDriver {
     this.authStorage.logout(providerId);
     this.modelRegistry.refresh();
     await context.resourceLoader.reload();
+    this.syncExtensionProviders(context);
     await this.reconcileEnabledModelPatterns(context);
     return this.buildSnapshot(context);
   }
@@ -401,6 +428,7 @@ export class RuntimeSupervisor implements RuntimeResourceDriver {
       resourceLoader,
     };
     this.contexts.set(workspace.workspaceId, context);
+    this.syncExtensionProviders(context);
     return context;
   }
 
@@ -410,7 +438,7 @@ export class RuntimeSupervisor implements RuntimeResourceDriver {
       this.buildSkillRecords(context, resolvedPaths.skills),
       this.buildExtensionRecords(context, resolvedPaths.extensions),
       this.buildProviderRecords(),
-      this.buildModelRecords(),
+      this.buildModelRecords(context),
       this.buildPackageRecords(context, resolvedPaths),
     ]);
 
@@ -492,8 +520,11 @@ export class RuntimeSupervisor implements RuntimeResourceDriver {
       });
   }
 
-  private async buildModelRecords(): Promise<readonly RuntimeModelRecord[]> {
+  private async buildModelRecords(context?: RuntimeContext): Promise<readonly RuntimeModelRecord[]> {
     this.modelRegistry.refresh();
+    if (context) {
+      this.syncExtensionProviders(context);
+    }
     const availableKeys = new Set(
       (await this.modelRegistry.getAvailable()).map((model) => `${model.provider}:${model.id}`),
     );
@@ -531,7 +562,7 @@ export class RuntimeSupervisor implements RuntimeResourceDriver {
     }
 
     const providers = await this.buildProviderRecords();
-    const models = await this.buildModelRecords();
+    const models = await this.buildModelRecords(context);
     const currentPatterns = pruneStaleExactModelPatterns(storedPatterns, models, providers);
     const availableModelIds = new Set(
       models

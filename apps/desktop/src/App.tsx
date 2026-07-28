@@ -470,7 +470,7 @@ export default function App() {
     : undefined;
   const settingsRuntime = settingsWorkspace ? snapshot?.runtimeByWorkspace[settingsWorkspace.id] : undefined;
   const globalSettingsRuntime = snapshot ? getEffectiveModelRuntime(snapshot, undefined) : undefined;
-  const settingsViewWorkspace = settingsSection === "models" || settingsSection === "providers" ? undefined : settingsWorkspace;
+  const settingsViewWorkspace = settingsSection === "providers" ? undefined : settingsWorkspace;
   const skillsRuntime = skillsWorkspace ? snapshot?.runtimeByWorkspace[skillsWorkspace.id] : undefined;
   const extensionsRuntime = extensionsWorkspace ? snapshot?.runtimeByWorkspace[extensionsWorkspace.id] : undefined;
   const extensionsCommandCompatibility = extensionsWorkspace
@@ -2171,7 +2171,6 @@ export default function App() {
     { id: "appearance", label: t("settings.nav.appearance") },
     { id: "general", label: t("settings.nav.general") },
     { id: "providers", label: t("settings.nav.providers") },
-    { id: "models", label: t("settings.nav.models") },
     { id: "mcp", label: t("settings.nav.mcp") },
     { id: "cli", label: t("settings.nav.cli") },
     { id: "notifications", label: t("settings.nav.notifications") },
@@ -2220,7 +2219,6 @@ export default function App() {
           onSetMcpServerEnabled={handleSetMcpServerEnabled}
           onSetCliEnabled={handleSetCliEnabled}
           onDetectAllCli={handleDetectAllCli}
-          onSetDefaultModel={handleSetDefaultModel}
           onSetNotificationPreferences={handleSetNotificationPreferences}
           onSetIntegratedTerminalShell={handleSetIntegratedTerminalShell}
           onSetTuiTabLimit={handleSetTuiTabLimit}
@@ -2228,9 +2226,7 @@ export default function App() {
           onSetRemoteUiToken={handleSetRemoteUiToken}
           onRequestNotificationPermission={handleRequestNotificationPermission}
           onOpenSystemNotificationSettings={handleOpenSystemNotificationSettings}
-          onSetScopedModelPatterns={handleSetScopedModelPatterns}
           onSetThemeMode={handleSetThemeMode}
-          onSetThinkingLevel={handleSetThinkingLevel}
           onToggleSkillCommands={handleToggleSkillCommands}
           onSetEnableTransparency={(enabled) => {
             void updateSnapshot(api, setSnapshot, () => api.setEnableTransparency(enabled));
