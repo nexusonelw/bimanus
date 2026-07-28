@@ -29,6 +29,11 @@
 #   --help               Show help
 #
 # Supports Linux x64 and arm64 AppImages from GitHub Releases.
+#
+# If raw.githubusercontent.com / github.com returns 404 or is blocked, use a mirror:
+#   curl -fsSL https://cdn.jsdelivr.net/gh/nexusonelw/bimanus@main/scripts/install-linux.sh | bash -s -- --yes
+#   BIMANUS_GITHUB_PROXY=https://ghfast.top/ bash install-linux.sh --yes
+#
 # Uninstall:
 #   curl -fsSL https://raw.githubusercontent.com/nexusonelw/bimanus/main/scripts/uninstall-linux.sh | bash
 
@@ -175,19 +180,103 @@ parse_args() {
   done
 }
 
+# Optional proxy/mirror prefix for GitHub hosts, e.g.:
+#   export BIMANUS_GITHUB_PROXY=https://ghfast.top/
+# turns https://github.com/... into https://ghfast.top/https://github.com/...
+GITHUB_PROXY_PREFIX="${BIMANUS_GITHUB_PROXY:-${GITHUB_PROXY:-}}"
+
+proxied_url() {
+  local url="$1"
+  if [[ -z "$GITHUB_PROXY_PREFIX" ]]; then
+    printf '%s\n' "$url"
+    return
+  fi
+  printf '%s/%s\n' "${GITHUB_PROXY_PREFIX%/}" "$url"
+}
+
+curl_fail_hint() {
+  local url="$1"
+  local code="$2"
+  cat >&2 <<EOF
+
+✖ HTTP ${code:-error} while fetching:
+  ${url}
+
+Common causes:
+  1) Network cannot reach GitHub / raw.githubusercontent.com (404/timeout/blocked)
+  2) Temporary CDN cache or mirror lag
+
+Try one of these:
+  # A) Fetch install script from jsDelivr instead of raw.githubusercontent.com
+  curl -fsSL https://cdn.jsdelivr.net/gh/nexusonelw/bimanus@main/scripts/install-linux.sh | \\
+    bash -s -- --yes --port ${PORT:-43174} --token 'your-secret'
+
+  # B) Retry API/asset downloads through a GitHub proxy
+  BIMANUS_GITHUB_PROXY=https://ghfast.top/ \\
+    bash <(curl -fsSL https://cdn.jsdelivr.net/gh/nexusonelw/bimanus@main/scripts/install-linux.sh) \\
+    --yes --port ${PORT:-43174} --token 'your-secret'
+
+  # C) Manual AppImage download from the release page, then:
+  #   chmod +x Bimanus-*.AppImage
+  #   PI_APP_REMOTE_UI=1 PI_APP_REMOTE_UI_PORT=43174 PI_APP_REMOTE_UI_TOKEN='secret' ./Bimanus-*.AppImage
+EOF
+}
+
+curl_get() {
+  # curl_get <url> [curl args...]
+  # Prints response body to stdout. On failure, shows URL + status and exits.
+  local url="$1"
+  shift || true
+  local final_url code tmp
+  final_url="$(proxied_url "$url")"
+  tmp="$(mktemp)"
+  code="$(curl -sS -L --connect-timeout 20 --retry 2 --retry-delay 1 \
+    -o "$tmp" -w '%{http_code}' \
+    "$@" \
+    "$final_url" || true)"
+  if [[ "$code" != "200" && "$code" != "000" ]]; then
+    # 000 = transport failure; still surface it
+    :
+  fi
+  if [[ ! "$code" =~ ^2[0-9][0-9]$ ]]; then
+    rm -f "$tmp"
+    curl_fail_hint "$final_url" "$code"
+    exit 1
+  fi
+  cat "$tmp"
+  rm -f "$tmp"
+}
+
+curl_download() {
+  # curl_download <url> <output-path>
+  local url="$1"
+  local out="$2"
+  local final_url code
+  final_url="$(proxied_url "$url")"
+  info "Downloading: $final_url"
+  code="$(curl -L --connect-timeout 20 --retry 2 --retry-delay 1 \
+    --progress-bar \
+    -o "$out" -w '%{http_code}' \
+    "$final_url" || true)"
+  if [[ ! "$code" =~ ^2[0-9][0-9]$ ]]; then
+    rm -f "$out"
+    curl_fail_hint "$final_url" "$code"
+    exit 1
+  fi
+}
+
 github_api() {
   local url="$1"
   if [[ -n "${GITHUB_TOKEN:-${GH_TOKEN:-}}" ]]; then
-    curl -fsSL \
+    curl_get "$url" \
       -H "Accept: application/vnd.github+json" \
       -H "Authorization: Bearer ${GITHUB_TOKEN:-${GH_TOKEN}}" \
-      -H "X-GitHub-Api-Version: 2022-11-28" \
-      "$url"
+      -H "X-GitHub-Api-Version: 2022-11-28"
   else
-    curl -fsSL \
+    curl_get "$url" \
       -H "Accept: application/vnd.github+json" \
       -H "X-GitHub-Api-Version: 2022-11-28" \
-      "$url"
+      -H "User-Agent: bimanus-install-linux"
   fi
 }
 
@@ -507,7 +596,7 @@ main() {
   mkdir -p "$INSTALL_DIR" "$BIN_DIR" "$CONFIG_DIR"
   local appimage_path="${INSTALL_DIR}/${asset_name}"
   local tmp_path="${appimage_path}.partial"
-  curl -fL --progress-bar -o "$tmp_path" "$asset_url"
+  curl_download "$asset_url" "$tmp_path"
   mv "$tmp_path" "$appimage_path"
   chmod 755 "$appimage_path"
 
