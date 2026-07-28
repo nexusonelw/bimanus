@@ -114,6 +114,9 @@ export const desktopIpc = {
   listWorkspaceFiles: "pi-gui:list-workspace-files",
   getChangedFiles: "pi-gui:get-changed-files",
   getFileDiff: "pi-gui:get-file-diff",
+  listCommitHistory: "pi-gui:list-commit-history",
+  getCommitDetails: "pi-gui:get-commit-details",
+  getCommitFileDiff: "pi-gui:get-commit-file-diff",
   commitChanges: "pi-gui:commit-changes",
   listRemoteBranches: "pi-gui:list-remote-branches",
   pushRemoteBranch: "pi-gui:push-remote-branch",
@@ -304,6 +307,25 @@ export function getDesktopCommandFromShortcut(input: DesktopShortcutInput): PiDe
   return undefined;
 }
 
+export interface GitCommitHistoryEntry {
+  readonly hash: string;
+  readonly shortHash: string;
+  readonly subject: string;
+  readonly authorName: string;
+  readonly committedAt: string;
+}
+
+export interface GitCommitFileEntry {
+  readonly path: string;
+  readonly status: "added" | "modified" | "deleted";
+}
+
+export interface GitCommitDetails extends GitCommitHistoryEntry {
+  readonly authorEmail: string;
+  readonly message: string;
+  readonly files: readonly GitCommitFileEntry[];
+}
+
 export interface PiDesktopApi {
   platform: NodeJS.Platform;
   versions: NodeJS.ProcessVersions;
@@ -442,6 +464,9 @@ export interface PiDesktopApi {
   listWorkspaceFiles(workspaceId: string): Promise<string[]>;
   getChangedFiles(workspaceId: string): Promise<{ path: string; status: "added" | "modified" | "deleted" | "untracked" }[]>;
   getFileDiff(workspaceId: string, filePath: string): Promise<string>;
+  listCommitHistory(workspaceId: string): Promise<GitCommitHistoryEntry[]>;
+  getCommitDetails(workspaceId: string, commitHash: string): Promise<GitCommitDetails>;
+  getCommitFileDiff(workspaceId: string, commitHash: string, filePath: string): Promise<string>;
   commitChanges(workspaceId: string, filePaths: readonly string[], message: string): Promise<void>;
   listRemoteBranches(workspaceId: string): Promise<{ remote: string; branch: string }[]>;
   pushRemoteBranch(workspaceId: string, remote: string, branch: string): Promise<void>;

@@ -16,6 +16,8 @@ import {
   type CliAdapterInfo,
   type CliDetectionMap,
   type OpenCodingCliEvent,
+  type GitCommitDetails,
+  type GitCommitHistoryEntry,
 } from "../src/ipc";
 import type {
   NavigateSessionTreeOptions,
@@ -286,6 +288,12 @@ contextBridge.exposeInMainWorld("piApp", {
     invokeIpc(desktopIpc.getChangedFiles, workspaceId) as Promise<{ path: string; status: "added" | "modified" | "deleted" | "untracked" }[]>,
   getFileDiff: (workspaceId: string, filePath: string) =>
     invokeIpc(desktopIpc.getFileDiff, workspaceId, filePath) as Promise<string>,
+  listCommitHistory: (workspaceId: string) =>
+    invokeIpc(desktopIpc.listCommitHistory, workspaceId) as Promise<GitCommitHistoryEntry[]>,
+  getCommitDetails: (workspaceId: string, commitHash: string) =>
+    invokeIpc(desktopIpc.getCommitDetails, workspaceId, commitHash) as Promise<GitCommitDetails>,
+  getCommitFileDiff: (workspaceId: string, commitHash: string, filePath: string) =>
+    invokeIpc(desktopIpc.getCommitFileDiff, workspaceId, commitHash, filePath) as Promise<string>,
   commitChanges: (workspaceId: string, filePaths: readonly string[], message: string) =>
     invokeIpc(desktopIpc.commitChanges, workspaceId, filePaths, message) as Promise<void>,
   listRemoteBranches: (workspaceId: string) =>

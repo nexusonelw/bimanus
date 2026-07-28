@@ -31,6 +31,8 @@ import {
   type TerminalLaunchConfig,
   type TerminalPanelSnapshot,
   type TerminalSize,
+  type GitCommitDetails,
+  type GitCommitHistoryEntry,
 } from "./ipc";
 import { isElectronHost } from "./platform-env";
 import { safeRandomUuid } from "./utils/uuid";
@@ -387,6 +389,12 @@ function installRemoteClient(): void {
         workspaceId,
       ),
     getFileDiff: (workspaceId: string, filePath: string) => invoke<string>(desktopIpc.getFileDiff, workspaceId, filePath),
+    listCommitHistory: (workspaceId: string) =>
+      invoke<GitCommitHistoryEntry[]>(desktopIpc.listCommitHistory, workspaceId),
+    getCommitDetails: (workspaceId: string, commitHash: string) =>
+      invoke<GitCommitDetails>(desktopIpc.getCommitDetails, workspaceId, commitHash),
+    getCommitFileDiff: (workspaceId: string, commitHash: string, filePath: string) =>
+      invoke<string>(desktopIpc.getCommitFileDiff, workspaceId, commitHash, filePath),
     commitChanges: (workspaceId: string, filePaths: readonly string[], message: string) =>
       invoke<void>(desktopIpc.commitChanges, workspaceId, filePaths, message),
     listRemoteBranches: (workspaceId: string) =>

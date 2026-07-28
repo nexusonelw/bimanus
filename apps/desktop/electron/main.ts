@@ -23,7 +23,10 @@ import { installCopySelectionContextMenu } from "./context-menu";
 import {
   commitChanges,
   getChangedFiles,
+  getCommitDetails,
+  getCommitFileDiff,
   getFileDiff,
+  listCommitHistory,
   listRemoteBranches,
   pushRemoteBranch,
 } from "./app-store-diff";
@@ -47,6 +50,7 @@ import {
 import { McpOAuthManager } from "./mcp-manager";
 import { DesktopMcpBridgeRuntime } from "./mcp-bridge-runtime";
 import { RemoteUiServer, type RemoteAgentInvokeRequest, type RemoteCodingAgent, type RemoteUiInvokeRequest } from "./remote-ui-server";
+import { applyRemoteUiCliArgsToEnv } from "./remote-ui-cli";
 import { RemoteSystemService } from "./remote-system-service";
 import {
   configureTuiDiagnosticsLog,
@@ -75,6 +79,8 @@ const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
 const windowTestMode = resolveWindowTestMode();
 const devReloadMarkersEnabled = process.env.PI_APP_DEV_RELOAD_MARKERS === "1";
 const execFileAsync = promisify(execFile);
+// CLI flags override env for remote UI configuration (port/token/host).
+applyRemoteUiCliArgsToEnv(process.argv.slice(1));
 let store: DesktopAppStore;
 const themeManager = new ThemeManager();
 const remoteSystemService = new RemoteSystemService();
@@ -2191,6 +2197,30 @@ async function handleRemoteUiInvoke(request: RemoteUiInvokeRequest): Promise<unk
       const workspacePath = store.getWorkspacePath(String(args[0] ?? ""));
       return workspacePath ? getFileDiff(workspacePath, String(args[1] ?? "")) : "";
     }
+    case desktopIpc.listCommitHistory: {
+      const workspacePath = store.getWorkspacePath(String(args[0] ?? ""));
+      return workspacePath ? listCommitHistory(workspacePath) : [];
+    }
+    case desktopIpc.getCommitDetails: {
+      const workspaceId = String(args[0] ?? "");
+      const workspacePath = store.getWorkspacePath(workspaceId);
+      if (!workspacePath) {
+        throw new Error(`Unknown workspace: ${workspaceId}`);
+      }
+      return getCommitDetails(workspacePath, String(args[1] ?? ""));
+    }
+    case desktopIpc.getCommitFileDiff: {
+      const workspaceId = String(args[0] ?? "");
+      const workspacePath = store.getWorkspacePath(workspaceId);
+      if (!workspacePath) {
+        throw new Error(`Unknown workspace: ${workspaceId}`);
+      }
+      return getCommitFileDiff(
+        workspacePath,
+        String(args[1] ?? ""),
+        String(args[2] ?? ""),
+      );
+    }
     case desktopIpc.commitChanges: {
       const workspacePath = store.getWorkspacePath(String(args[0] ?? ""));
       if (!workspacePath) {
@@ -2877,6 +2907,30 @@ app.whenReady().then(async () => {
     }
     return getFileDiff(workspacePath, filePath);
   });
+  ipcMain.handle(desktopIpc.listCommitHistory, async (_event, workspaceId: string) => {
+    const workspacePath = store.getWorkspacePath(workspaceId);
+    return workspacePath ? listCommitHistory(workspacePath) : [];
+  });
+  ipcMain.handle(
+    desktopIpc.getCommitDetails,
+    async (_event, workspaceId: string, commitHash: string) => {
+      const workspacePath = store.getWorkspacePath(workspaceId);
+      if (!workspacePath) {
+        throw new Error(`Unknown workspace: ${workspaceId}`);
+      }
+      return getCommitDetails(workspacePath, commitHash);
+    },
+  );
+  ipcMain.handle(
+    desktopIpc.getCommitFileDiff,
+    async (_event, workspaceId: string, commitHash: string, filePath: string) => {
+      const workspacePath = store.getWorkspacePath(workspaceId);
+      if (!workspacePath) {
+        throw new Error(`Unknown workspace: ${workspaceId}`);
+      }
+      return getCommitFileDiff(workspacePath, commitHash, filePath);
+    },
+  );
   ipcMain.handle(
     desktopIpc.commitChanges,
     async (_event, workspaceId: string, filePaths: readonly string[], message: string) => {

@@ -19,10 +19,10 @@
  * 本 Pane 不再渲染独立的迷你 header，避免与 TerminalPanel 自身工具栏重复堆叠。
  */
 
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import type { WorkspaceRecord } from "../desktop-state";
 import type { TerminalLaunchConfig, TerminalSessionSnapshot } from "../ipc";
-import { TerminalPanel } from "../terminal-panel";
+import { CliLaunchErrorNotice, TerminalPanel } from "../terminal-panel";
 import { useI18n } from "../i18n";
 import type { CliType, SplitPanelTab, SplitLayout } from "./types";
 
@@ -88,6 +88,12 @@ function buildCliLaunchConfig(cliType: CliType, prompt?: string): TerminalLaunch
   return { mode: cliType, prompt };
 }
 
+type CliPreflightState = {
+  readonly key: string;
+  readonly status: "checking" | "ready" | "error";
+  readonly message: string;
+};
+
 /**
  * 单个分屏 Pane 组件
  */
@@ -105,6 +111,85 @@ export function SplitPanelPane({
   onRegisterRestart,
 }: SplitPanelPaneProps) {
   const { t } = useI18n();
+  const tabId = tab?.id;
+  const cliType = tab?.cliType;
+  const tabTitle = tab?.title ?? cliType ?? "CLI";
+  const workspaceId = workspace?.id;
+  const preflightKey = tabId && cliType && workspaceId
+    ? `${workspaceId}\0${tabId}\0${cliType}`
+    : "";
+  const [cliPreflight, setCliPreflight] = useState<CliPreflightState>({
+    key: "",
+    status: "checking",
+    message: "",
+  });
+  const preflightStatus = cliPreflight.key === preflightKey ? cliPreflight.status : "checking";
+  const preflightMessage = cliPreflight.key === preflightKey ? cliPreflight.message : "";
+
+  useEffect(() => {
+    if (!preflightKey || !cliType || !workspaceId) {
+      return;
+    }
+    const api = window.piApp;
+    if (!api) {
+      setCliPreflight({ key: preflightKey, status: "ready", message: "" });
+      return;
+    }
+
+    let active = true;
+    setCliPreflight({ key: preflightKey, status: "checking", message: "" });
+    void api.detectCli(cliType)
+      .then((result) => {
+        if (!active) {
+          return;
+        }
+        if (result.installed) {
+          setCliPreflight({ key: preflightKey, status: "ready", message: "" });
+          return;
+        }
+        const detectorMessage = result.error?.trim();
+        setCliPreflight({
+          key: preflightKey,
+          status: "error",
+          message: detectorMessage || `${tabTitle} CLI is not installed or cannot be found in PATH.`,
+        });
+      })
+      .catch(() => {
+        if (active) {
+          // If the optional preflight itself is unavailable, keep the existing
+          // ensure-panel path and surface any launch rejection through onLaunchError.
+          setCliPreflight({ key: preflightKey, status: "ready", message: "" });
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [cliType, preflightKey, tabTitle, workspaceId]);
+
+  const handleRegisterRestart = useCallback(
+    (fn: (() => void) | null) => {
+      if (tabId) {
+        onRegisterRestart?.(tabId, fn);
+      }
+    },
+    [onRegisterRestart, tabId],
+  );
+
+  const handleLaunchError = useCallback((message: string) => {
+    if (preflightKey) {
+      setCliPreflight({ key: preflightKey, status: "error", message });
+    }
+  }, [preflightKey]);
+
+  const handleRetryLaunch = useCallback(() => {
+    if (preflightKey) {
+      // Bypass the cached detector result on retry. The terminal launch path
+      // resolves PATH synchronously, so a just-installed CLI can start at once.
+      setCliPreflight({ key: preflightKey, status: "ready", message: "" });
+    }
+  }, [preflightKey]);
+
   // 点击 Pane 激活
   const handleClick = () => {
     onActivate?.(paneIndex);
@@ -151,20 +236,29 @@ export function SplitPanelPane({
   // 每个 Tab 拥有独立且稳定的 terminalScopeId，确保多分屏下 PTY 数据流不会串线。
   const terminalScopeId = `split-panel:${tab.id}`;
 
-  // 把 TerminalPanel 的 registerRestart(fn) 包装为 onRegisterRestart(tab.id, fn)，
-  // 让上层 SplitPanel 能按 tabId 索引到对应终端的重启函数。
-  const handleRegisterRestart = useCallback(
-    (fn: (() => void) | null) => {
-      onRegisterRestart?.(tab.id, fn);
-    },
-    [onRegisterRestart, tab.id],
-  );
-
   return (
     <div className={paneClass} onClick={handleClick} data-pane-index={paneIndex}>
       {/* 终端容器：直接复用 TerminalPanel，承载真实的远程 TUI 会话 */}
       <div className="split-panel__pane-terminal" data-terminal-container={`pane-${paneIndex}`}>
-        {workspace ? (
+        {!workspace ? (
+          <div className="split-panel__pane-empty-placeholder">
+            <div className="split-panel__pane-empty-text">{t("splitPanel.workspaceNotReady")}</div>
+          </div>
+        ) : preflightStatus === "checking" ? (
+          <div className="split-panel__loading" role="status" aria-live="polite">
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+              <div className="split-panel__loading-spinner" aria-hidden="true" />
+              <span>正在检查 {tab.title} CLI… / Checking CLI availability…</span>
+            </div>
+          </div>
+        ) : preflightStatus === "error" ? (
+          <CliLaunchErrorNotice
+            message={preflightMessage || `${tab.title} CLI failed to start.`}
+            launchConfig={buildCliLaunchConfig(tab.cliType, tab.prompt)}
+            retryLabel={t("terminal.timeoutRetry")}
+            onRetry={handleRetryLaunch}
+          />
+        ) : (
           <TerminalPanel
             key={tab.id}
             workspace={workspace}
@@ -184,6 +278,7 @@ export function SplitPanelPane({
             testId={`split-panel-terminal-${tab.id}`}
             onHeightChange={() => {}}
             onToggleTakeover={() => {}}
+            onLaunchError={handleLaunchError}
             onHide={() => {
               // 右上角 "关闭终端" 按钮：路由到与工具栏 × 相同的 Tab 关闭路径，
               // 由 App.tsx 的 onTabClosed 终结后端 PTY 子进程组。
@@ -198,10 +293,6 @@ export function SplitPanelPane({
               onSessionClosed?.(tab.id, closedSession, nextActiveSession);
             }}
           />
-        ) : (
-          <div className="split-panel__pane-empty-placeholder">
-            <div className="split-panel__pane-empty-text">{t("splitPanel.workspaceNotReady")}</div>
-          </div>
         )}
       </div>
     </div>

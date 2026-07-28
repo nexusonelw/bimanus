@@ -891,6 +891,145 @@ html.platform-linux .topbar {
   overflow-y: auto;
 }
 
+.diff-panel__history-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.diff-panel__history-error {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--danger, #dc2626);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.diff-panel__history-list {
+  flex: 0 1 220px;
+  min-height: 96px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--line);
+}
+
+.diff-panel__history-entry {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 12px;
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
+  background: transparent;
+  color: var(--text-strong);
+  text-align: left;
+  cursor: pointer;
+}
+
+.diff-panel__history-entry:hover,
+.diff-panel__history-entry--selected {
+  background: var(--surface-muted);
+}
+
+.diff-panel__history-entry--selected {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.diff-panel__history-entry-subject {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-panel__history-entry-meta,
+.diff-panel__history-details-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 9px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.diff-panel__history-entry-meta code,
+.diff-panel__history-details-meta code {
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+
+.diff-panel__history-details-loading {
+  flex-shrink: 0;
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.diff-panel__history-details {
+  flex: 0 1 290px;
+  min-height: 120px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--line);
+}
+
+.diff-panel__history-details-header {
+  padding: 11px 12px 7px;
+}
+
+.diff-panel__history-details-header strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.diff-panel__history-message {
+  margin: 0;
+  padding: 7px 12px 11px;
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.diff-panel__history-files-title {
+  padding: 7px 12px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.diff-panel__history-files {
+  padding: 4px 0;
+}
+
+.diff-panel__history-files-empty {
+  padding: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.diff-panel__history-file-name {
+  padding-left: 6px;
+}
+
+.diff-panel__history-viewer {
+  min-height: 180px;
+}
+
 .diff-panel__push-backdrop {
   position: absolute;
   inset: 0;

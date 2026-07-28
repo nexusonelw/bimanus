@@ -19,6 +19,25 @@ export interface RemoteBranchEntry {
   readonly branch: string;
 }
 
+export interface GitCommitHistoryEntry {
+  readonly hash: string;
+  readonly shortHash: string;
+  readonly subject: string;
+  readonly authorName: string;
+  readonly committedAt: string;
+}
+
+export interface GitCommitFileEntry {
+  readonly path: string;
+  readonly status: "added" | "modified" | "deleted";
+}
+
+export interface GitCommitDetails extends GitCommitHistoryEntry {
+  readonly authorEmail: string;
+  readonly message: string;
+  readonly files: readonly GitCommitFileEntry[];
+}
+
 export function getChangedFiles(workspacePath: string): Promise<ChangedFileEntry[]> {
   return new Promise((resolve) => {
     execFile(
@@ -120,6 +139,100 @@ export async function commitChanges(
   ]);
 }
 
+export async function listCommitHistory(
+  workspacePath: string,
+): Promise<GitCommitHistoryEntry[]> {
+  const output = await runGitOutput(workspacePath, [
+    "log",
+    "--date=iso-strict",
+    "--pretty=format:%H%x1f%h%x1f%an%x1f%cI%x1f%s%x1e",
+  ]).catch(() => "");
+
+  return output
+    .split("\x1e")
+    .map((record) => record.trim())
+    .filter(Boolean)
+    .flatMap((record) => {
+      const [hash, shortHash, authorName, committedAt, ...subjectParts] = record.split("\x1f");
+      const subject = subjectParts.join("\x1f");
+      return hash && shortHash && authorName && committedAt
+        ? [{ hash, shortHash, authorName, committedAt, subject }]
+        : [];
+    });
+}
+
+export async function getCommitDetails(
+  workspacePath: string,
+  commitHash: string,
+): Promise<GitCommitDetails> {
+  const resolvedHash = await resolveCommitHash(workspacePath, commitHash);
+  const [metadataOutput, filesOutput] = await Promise.all([
+    runGitOutput(workspacePath, [
+      "show",
+      "-s",
+      "--date=iso-strict",
+      "--format=%H%x1f%h%x1f%an%x1f%ae%x1f%cI%x1f%B",
+      resolvedHash,
+    ]),
+    runGitOutput(workspacePath, [
+      "diff-tree",
+      "--root",
+      "--no-commit-id",
+      "--name-status",
+      "-r",
+      "-z",
+      "--no-renames",
+      resolvedHash,
+    ]),
+  ]);
+  const [hash, shortHash, authorName, authorEmail, committedAt, ...messageParts] =
+    metadataOutput.split("\x1f");
+  const message = messageParts.join("\x1f").trim();
+  const subject = message.split("\n")[0]?.trim() ?? "";
+  const tokens = filesOutput.split("\0").filter(Boolean);
+  const files: GitCommitFileEntry[] = [];
+  for (let index = 0; index + 1 < tokens.length; index += 2) {
+    const statusToken = tokens[index] ?? "";
+    const filePath = tokens[index + 1] ?? "";
+    if (!filePath) {
+      continue;
+    }
+    files.push({
+      path: filePath,
+      status: parseCommitFileStatus(statusToken),
+    });
+  }
+
+  return {
+    hash: hash || resolvedHash,
+    shortHash: shortHash || resolvedHash.slice(0, 7),
+    authorName: authorName || "",
+    authorEmail: authorEmail || "",
+    committedAt: committedAt || "",
+    subject,
+    message,
+    files,
+  };
+}
+
+export async function getCommitFileDiff(
+  workspacePath: string,
+  commitHash: string,
+  filePath: string,
+): Promise<string> {
+  validateFilePath(workspacePath, filePath);
+  const resolvedHash = await resolveCommitHash(workspacePath, commitHash);
+  return runGitOutput(workspacePath, [
+    "show",
+    "--format=",
+    "--no-ext-diff",
+    "--no-renames",
+    resolvedHash,
+    "--",
+    filePath,
+  ]);
+}
+
 export async function listRemoteBranches(workspacePath: string): Promise<RemoteBranchEntry[]> {
   const [remoteOutput, refOutput, currentBranchOutput] = await Promise.all([
     runGitOutput(workspacePath, ["remote"]),
@@ -183,6 +296,29 @@ export async function pushRemoteBranch(
   await runGit(workspacePath, ["push", "--", remote, `HEAD:refs/heads/${branch}`]);
 }
 
+function parseCommitFileStatus(statusToken: string): GitCommitFileEntry["status"] {
+  const status = statusToken[0] ?? "M";
+  if (status === "A") {
+    return "added";
+  }
+  if (status === "D") {
+    return "deleted";
+  }
+  return "modified";
+}
+
+async function resolveCommitHash(workspacePath: string, commitHash: string): Promise<string> {
+  const normalizedHash = commitHash.trim();
+  if (!/^[0-9a-f]{4,64}$/i.test(normalizedHash)) {
+    throw new Error("Invalid commit hash");
+  }
+  return (await runGitOutput(workspacePath, [
+    "rev-parse",
+    "--verify",
+    `${normalizedHash}^{commit}`,
+  ])).trim();
+}
+
 function parseStatus(xy: string): ChangedFileEntry["status"] {
   const x = xy[0] ?? " ";
   const y = xy[1] ?? " ";
@@ -208,7 +344,7 @@ function runGitOutput(workspacePath: string, args: readonly string[]): Promise<s
     execFile(
       "git",
       [...args],
-      { cwd: workspacePath, maxBuffer: 2 * 1024 * 1024 },
+      { cwd: workspacePath, maxBuffer: 10 * 1024 * 1024 },
       (error, stdout, stderr) => {
         if (error) {
           reject(new Error(stderr.trim() || error.message));

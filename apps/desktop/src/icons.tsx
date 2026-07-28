@@ -362,3 +362,13 @@ export function DiffIcon() {
     </Icon>
   );
 }
+
+export function HistoryIcon() {
+  return (
+    <Icon>
+      <path d="M5.6 6.2H2.8V3.4" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.3" />
+      <path d="M3.1 6.1a7 7 0 1 1-.2 7.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.3" fill="none" />
+      <path d="M10 6.2v4.2l2.8 1.7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.3" />
+    </Icon>
+  );
+}

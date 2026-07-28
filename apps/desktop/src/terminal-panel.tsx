@@ -26,6 +26,117 @@ const PI_TUI_STARTUP_TIMEOUT_MS_REMOTE = 45_000;
 function resolvePiTuiStartupTimeoutMs(): number {
   return isElectronHost() ? PI_TUI_STARTUP_TIMEOUT_MS_LOCAL : PI_TUI_STARTUP_TIMEOUT_MS_REMOTE;
 }
+
+type CliInstallCommand = {
+  readonly label: string;
+  readonly command: string;
+};
+
+type CliInstallGuidance = {
+  readonly displayName: string;
+  readonly executable: string;
+  readonly commands: readonly CliInstallCommand[];
+  readonly docsUrl: string;
+};
+
+/**
+ * Renderer-only install hints for split-panel CLIs. These commands are copied
+ * from each vendor's public installation docs and are never executed by the app.
+ */
+const CLI_INSTALL_GUIDANCE: Readonly<Record<string, CliInstallGuidance>> = {
+  codex: {
+    displayName: "CodeX",
+    executable: "codex",
+    commands: [
+      { label: "macOS / Linux", command: "curl -fsSL https://chatgpt.com/codex/install.sh | sh" },
+      { label: "npm (all platforms)", command: "npm install -g @openai/codex" },
+      { label: "Homebrew (macOS)", command: "brew install --cask codex" },
+    ],
+    docsUrl: "https://developers.openai.com/codex/cli",
+  },
+  claude: {
+    displayName: "Claude Code",
+    executable: "claude",
+    commands: [
+      { label: "macOS / Linux / WSL", command: "curl -fsSL https://claude.ai/install.sh | bash" },
+      { label: "Windows PowerShell", command: "irm https://claude.ai/install.ps1 | iex" },
+      { label: "npm (all platforms)", command: "npm install -g @anthropic-ai/claude-code" },
+    ],
+    docsUrl: "https://code.claude.com/docs/en/setup",
+  },
+  opencode: {
+    displayName: "OpenCode",
+    executable: "opencode",
+    commands: [
+      { label: "macOS / Linux", command: "curl -fsSL https://opencode.ai/install | bash" },
+      { label: "npm (all platforms)", command: "npm install -g opencode-ai" },
+    ],
+    docsUrl: "https://opencode.ai/docs/",
+  },
+  grok: {
+    displayName: "Grok",
+    executable: "grok",
+    commands: [
+      { label: "macOS / Linux / WSL", command: "curl -fsSL https://x.ai/cli/install.sh | bash" },
+      { label: "Windows PowerShell", command: "irm https://x.ai/cli/install.ps1 | iex" },
+    ],
+    docsUrl: "https://docs.x.ai/build/overview",
+  },
+  copilot: {
+    displayName: "GitHub Copilot",
+    executable: "copilot",
+    commands: [
+      { label: "macOS / Linux", command: "curl -fsSL https://gh.io/copilot-install | bash" },
+      { label: "Windows PowerShell", command: "winget install GitHub.Copilot" },
+      { label: "npm (all platforms)", command: "npm install -g @github/copilot" },
+    ],
+    docsUrl: "https://docs.github.com/copilot/how-tos/set-up/install-copilot-cli",
+  },
+  antigravity: {
+    displayName: "Antigravity",
+    executable: "agy",
+    commands: [
+      { label: "macOS / Linux", command: "curl -fsSL https://antigravity.google/cli/install.sh | bash" },
+      { label: "Windows PowerShell", command: "irm https://antigravity.google/cli/install.ps1 | iex" },
+    ],
+    docsUrl: "https://antigravity.google/docs/cli/getting-started",
+  },
+  kiro: {
+    displayName: "Kiro",
+    executable: "kiro-cli",
+    commands: [
+      { label: "macOS / Linux", command: "curl -fsSL https://cli.kiro.dev/install | bash" },
+      { label: "Windows PowerShell", command: "irm https://cli.kiro.dev/install.ps1 | iex" },
+    ],
+    docsUrl: "https://kiro.dev/docs/cli/installation/",
+  },
+  cursor: {
+    displayName: "Cursor",
+    executable: "cursor-agent",
+    commands: [
+      { label: "macOS / Linux / WSL", command: "curl https://cursor.com/install -fsS | bash" },
+    ],
+    docsUrl: "https://cursor.com/docs/cli/installation",
+  },
+  droid: {
+    displayName: "Droid",
+    executable: "droid",
+    commands: [
+      { label: "macOS / Linux", command: "curl -fsSL https://app.factory.ai/cli | sh" },
+      { label: "Windows PowerShell", command: "irm https://app.factory.ai/cli/windows | iex" },
+      { label: "npm (all platforms)", command: "npm install -g droid" },
+    ],
+    docsUrl: "https://docs.factory.ai/cli/getting-started/quickstart",
+  },
+};
+
+const CLI_INSTALL_ALIASES: Readonly<Record<string, string>> = {
+  "claude-code": "claude",
+  "kiro-cli": "kiro",
+  "cursor-agent": "cursor",
+  agy: "antigravity",
+};
+
 // ponytail: terminal tab metadata may lag by 50ms; lower this only if UI chrome needs fresher replay state.
 const TERMINAL_PANEL_STATE_FLUSH_MS = 50;
 
@@ -80,6 +191,8 @@ interface TerminalPanelProps {
     closedSession: TerminalSessionSnapshot,
     nextActiveSession: TerminalSessionSnapshot | undefined,
   ) => void | Promise<void>;
+  /** Mirrors launch failures to an embedding container that owns the error surface. */
+  readonly onLaunchError?: (message: string) => void;
   /** Bumped by the shell when re-opening a hidden pi-tui session to force replay resync. */
   readonly reattachEpoch?: number;
   /**
@@ -121,6 +234,7 @@ export function TerminalPanel({
   onHide,
   onActiveSessionChange,
   onSessionClosed,
+  onLaunchError,
   reattachEpoch = 0,
   hideToolbar = false,
   registerRestart,
@@ -161,6 +275,7 @@ export function TerminalPanel({
   const panelSnapshotRef = useRef<TerminalPanelSnapshot | null>(null);
   const latestLaunchConfigRef = useRef(launchConfig);
   const onActiveSessionChangeRef = useRef(onActiveSessionChange);
+  const onLaunchErrorRef = useRef(onLaunchError);
   const lastPanelRequestIdentityRef = useRef("");
   const terminalDataChunkCountRef = useRef(new Map<string, number>());
   const pendingTerminalDataRef = useRef(new Map<string, TerminalDataEvent[]>());
@@ -179,6 +294,13 @@ export function TerminalPanel({
   } | null>(null);
   latestLaunchConfigRef.current = launchConfig;
   onActiveSessionChangeRef.current = onActiveSessionChange;
+  onLaunchErrorRef.current = onLaunchError;
+
+  useEffect(() => {
+    if (error) {
+      onLaunchErrorRef.current?.(error);
+    }
+  }, [error]);
 
   const activeSession = useMemo(
     () => panel?.sessions.find((session) => session.id === panel.activeSessionId),
@@ -377,7 +499,8 @@ export function TerminalPanel({
       })
       .catch((err: unknown) => {
         if (active) {
-          setError(err instanceof Error ? err.message : String(err));
+          const message = err instanceof Error ? err.message : String(err);
+          setError(message);
         }
       });
     return () => {
@@ -1127,23 +1250,17 @@ export function TerminalPanel({
       </div>
       ) : null}
       {error ? (
-        <div className="terminal-panel__error">
-          <span className="terminal-panel__error-text">{error}</span>
-          <button
-            type="button"
-            className="icon-button terminal-panel__error-retry"
-            title={t("terminal.timeoutRetry")}
-            aria-label={t("terminal.timeoutRetry")}
-            onClick={() => {
-              hasVisibleTerminalOutputRef.current = false;
-              terminalRef.current?.reset();
-              setError("");
-              setRetryEpoch((e) => e + 1);
-            }}
-          >
-            <RefreshIcon />
-          </button>
-        </div>
+        <CliLaunchErrorNotice
+          message={error}
+          launchConfig={latestLaunchConfigRef.current}
+          retryLabel={t("terminal.timeoutRetry")}
+          onRetry={() => {
+            hasVisibleTerminalOutputRef.current = false;
+            terminalRef.current?.reset();
+            setError("");
+            setRetryEpoch((e) => e + 1);
+          }}
+        />
       ) : (
         <div className="terminal-panel__viewport" ref={containerRef} />
       )}
@@ -1162,6 +1279,149 @@ export function TerminalPanel({
 }
 
 type TerminalAddon = Parameters<Terminal["loadAddon"]>[0];
+
+function getCliInstallGuidance(
+  message: string,
+  launchConfig: TerminalLaunchConfig | undefined,
+): CliInstallGuidance | null {
+  const executable = message.match(/(?:CLI\s+)?executable\s+\\?[\"']([^\"']+)\\?[\"']/i)?.[1];
+  const mode = executable ?? (
+    launchConfig?.mode === "pi-tui" || launchConfig?.mode === "shell"
+      ? undefined
+      : launchConfig?.mode
+  );
+  const key = normalizeCliInstallKey(mode);
+  const guidance = key ? CLI_INSTALL_GUIDANCE[key] : undefined;
+  if (!guidance || !isCliLaunchFailure(message)) {
+    return null;
+  }
+  return guidance;
+}
+
+function normalizeCliInstallKey(value: unknown): string {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return CLI_INSTALL_ALIASES[normalized] ?? normalized;
+}
+
+function isCliLaunchFailure(message: string): boolean {
+  return /(?:not found|not installed|not available|enoent|executable|failed|could not|unable|cannot|\bcli\b.*\berror\b)/i.test(message);
+}
+
+export function CliLaunchErrorNotice({
+  message,
+  launchConfig,
+  retryLabel,
+  onRetry,
+}: {
+  readonly message: string;
+  readonly launchConfig?: TerminalLaunchConfig;
+  readonly retryLabel: string;
+  readonly onRetry: () => void;
+}): ReactNode {
+  const guidance = getCliInstallGuidance(message, launchConfig);
+  return (
+    <div
+      className="terminal-panel__error"
+      role="alert"
+      style={{
+        boxSizing: "border-box",
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 12,
+        width: "100%",
+        height: "100%",
+        minWidth: 0,
+        overflow: "auto",
+        background: "rgba(15, 23, 42, 0.06)",
+        color: "var(--error-ink, #dc2626)",
+      }}
+    >
+      <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+        <span
+          className="terminal-panel__error-text"
+          style={{ display: "block", overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}
+        >
+          {message}
+        </span>
+        {guidance ? <CliInstallGuidanceCard guidance={guidance} /> : null}
+      </div>
+      <button
+        type="button"
+        className="icon-button terminal-panel__error-retry"
+        title={retryLabel}
+        aria-label={retryLabel}
+        style={{ flexShrink: 0 }}
+        onClick={onRetry}
+      >
+        <RefreshIcon />
+      </button>
+    </div>
+  );
+}
+
+function CliInstallGuidanceCard({ guidance }: { guidance: CliInstallGuidance }): ReactNode {
+  return (
+    <div
+      role="alert"
+      style={{
+        boxSizing: "border-box",
+        width: "min(100%, 720px)",
+        maxWidth: "100%",
+        marginTop: 12,
+        padding: 14,
+        border: "1px solid rgba(148, 163, 184, 0.35)",
+        borderRadius: 10,
+        background: "rgba(15, 23, 42, 0.12)",
+        color: "var(--text-strong, #e5e7eb)",
+        fontFamily: "var(--font-sans, system-ui, sans-serif)",
+        lineHeight: 1.45,
+      }}
+    >
+      <div style={{ fontWeight: 650 }}>
+        {guidance.displayName} CLI 未安装或无法从 PATH 启动 / {guidance.displayName} CLI is not installed or is unavailable on PATH
+      </div>
+      <div style={{ marginTop: 6, opacity: 0.82 }}>
+        请安装后重新打开终端，或点击右侧重试。/ Install it, reopen the terminal, or use Retry after updating PATH.
+      </div>
+      <div style={{ marginTop: 10, fontSize: 11, opacity: 0.78 }}>
+        需要的可执行文件 / Expected executable: <code>{guidance.executable}</code>
+      </div>
+      {guidance.commands.map((item) => (
+        <div key={`${guidance.executable}-${item.label}`} style={{ marginTop: 10, minWidth: 0 }}>
+          <div style={{ marginBottom: 4, fontSize: 11, fontWeight: 600, opacity: 0.82 }}>{item.label}</div>
+          <pre
+            style={{
+              boxSizing: "border-box",
+              maxWidth: "100%",
+              margin: 0,
+              padding: "8px 10px",
+              overflowX: "auto",
+              whiteSpace: "pre-wrap",
+              overflowWrap: "anywhere",
+              wordBreak: "break-all",
+              border: "1px solid rgba(148, 163, 184, 0.22)",
+              borderRadius: 6,
+              background: "rgba(15, 23, 42, 0.18)",
+              color: "var(--text-strong, #f8fafc)",
+              fontFamily: "var(--font-mono, ui-monospace, monospace)",
+              fontSize: 11,
+            }}
+          >
+            {item.command}
+          </pre>
+        </div>
+      ))}
+      <a
+        href={guidance.docsUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ display: "inline-block", marginTop: 12, color: "var(--accent, #93c5fd)", fontSize: 11 }}
+      >
+        查看 {guidance.displayName} 官方安装文档 / Open official installation docs
+      </a>
+    </div>
+  );
+}
 
 function loadTerminalWebglAddon(
   terminal: Terminal,
