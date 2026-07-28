@@ -6,6 +6,7 @@
 //   - macOS x64   (dmg + zip)
 //   - Windows x64  (nsis .exe)        [cross-built via wine on macOS]
 //   - Linux  x64  (AppImage)         [cross-built on macOS]
+//   - Linux  arm64 (AppImage)        [cross-built on macOS]
 //
 // Then tags the repo and uploads every artifact to a GitHub Release on the
 // current `origin` remote (default: nexusonelw/bimanus).
@@ -18,6 +19,7 @@
 //   pnpm release                       # build everything + publish
 //   pnpm release --no-publish          # build only, do not upload
 //   pnpm release --no-mac-x64 --no-win # skip targets
+//   pnpm release --no-linux-arm64      # skip Linux arm64 AppImage
 //   pnpm release --version 0.2.0       # explicit version
 //   pnpm release --stable              # vX.Y.Z (no -beta suffix)
 //   pnpm release --dry-run             # plan only, no build/tag/push
@@ -148,15 +150,18 @@ async function main() {
     renameWinArtifactsToVersion(version);
   }
 
-  // ---- Linux x64 (AppImage) ----
-  if (targets.includes("linux-x64")) {
-    step("electron-builder --linux AppImage (x64)", () =>
+  // ---- Linux x64 / arm64 (AppImage) ----
+  const linuxArchs = [];
+  if (targets.includes("linux-x64")) linuxArchs.push("x64");
+  if (targets.includes("linux-arm64")) linuxArchs.push("arm64");
+  if (linuxArchs.length > 0) {
+    step(`electron-builder --linux AppImage (${linuxArchs.join(",")})`, () =>
       execFileSync(
         electronBuilderBin,
         [
           "--linux",
           "AppImage",
-          "--x64",
+          ...linuxArchs.flatMap((a) => [`--${a}`]),
           "--publish",
           "never",
           ...commonVersionArgs,
@@ -233,6 +238,7 @@ function parseArgs(argv) {
     macX64: true,
     winX64: true,
     linuxX64: true,
+    linuxArm64: true,
   };
   for (const a of argv) {
     switch (a) {
@@ -256,8 +262,14 @@ function parseArgs(argv) {
         o.winX64 = false;
         break;
       case "--no-linux":
+        o.linuxX64 = false;
+        o.linuxArm64 = false;
+        break;
       case "--no-linux-x64":
         o.linuxX64 = false;
+        break;
+      case "--no-linux-arm64":
+        o.linuxArm64 = false;
         break;
       default:
         if (a.startsWith("--version=")) o.version = a.slice("--version=".length);
@@ -323,6 +335,7 @@ function resolveTargets(opts) {
   if (opts.macX64) t.push("mac-x64");
   if (opts.winX64) t.push("win-x64");
   if (opts.linuxX64) t.push("linux-x64");
+  if (opts.linuxArm64) t.push("linux-arm64");
   return t;
 }
 
@@ -380,6 +393,28 @@ function generateNotes(version, artifacts) {
     "- macOS Intel (x64): .dmg / .zip",
     "- Windows x64: NSIS .exe",
     "- Linux x64: AppImage",
+    "- Linux arm64: AppImage",
+    "",
+    "## Linux one-line install",
+    "```bash",
+    "curl -fsSL https://raw.githubusercontent.com/nexusonelw/bimanus/main/scripts/install-linux.sh | bash",
+    "```",
+    "",
+    "The installer auto-detects x64/arm64, downloads the matching AppImage, prompts for",
+    "remote UI port/password, installs a `bimanus` launcher, and prints a LAN import URL:",
+    "`http://<lan-ip>:<port>/?token=<password>`.",
+    "",
+    "Non-interactive example:",
+    "```bash",
+    "curl -fsSL https://raw.githubusercontent.com/nexusonelw/bimanus/main/scripts/install-linux.sh | \\",
+    "  bash -s -- --yes --port 43174 --token 'your-secret'",
+    "```",
+    "",
+    "## Linux uninstall",
+    "```bash",
+    "curl -fsSL https://raw.githubusercontent.com/nexusonelw/bimanus/main/scripts/uninstall-linux.sh | bash",
+    "```",
+    "Add `--purge` to also remove `~/.config/Bimanus` app data.",
   ];
   return lines.join("\n");
 }

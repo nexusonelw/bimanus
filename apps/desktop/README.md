@@ -2,7 +2,11 @@
 
 Codex-style Electron shell for `pi`, with Playwright E2E coverage organized by test lane.
 
-macOS remains the source of truth for desktop UI verification. Linux is supported for packaging and manual validation, with CI packaging checks to catch AppImage regressions.
+macOS remains the source of truth for desktop UI verification. Linux is supported for packaging and manual validation (x64 / arm64 AppImage), with CI packaging checks to catch AppImage regressions.
+
+End-user Linux install / remote-access / uninstall guide:
+- English: [`docs/linux-install.md`](../../docs/linux-install.md)
+- 中文: [`docs/linux-install.zh.md`](../../docs/linux-install.zh.md)
 
 ## Setup
 
@@ -55,14 +59,31 @@ PI_APP_REMOTE_UI_TOKEN=replace-with-a-long-random-token \
 pnpm --filter @bimanus/desktop preview
 ```
 
+Packaged binaries also accept the same values as CLI flags (CLI overrides env):
+
+```bash
+bimanus --remote-ui --remote-ui-host 0.0.0.0 --remote-ui-port 43174 --remote-ui-token replace-with-a-long-random-token
+```
+
 Open the printed URL from a device that can reach the host machine. Keep this behind a trusted LAN, VPN, or tunnel; the remote UI controls workspace settings, providers, skills, extensions, packages, and sessions.
+
+For end-user Linux installs from GitHub Releases:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nexusonelw/bimanus/main/scripts/install-linux.sh | bash
+curl -fsSL https://raw.githubusercontent.com/nexusonelw/bimanus/main/scripts/uninstall-linux.sh | bash
+```
+
+See [`docs/linux-install.md`](../../docs/linux-install.md) for ports, passwords, CLI flags, install paths, and troubleshooting.
 
 On Windows, the bundled `pi` CLI is used for TUI launches by default.
 
-Package a Linux AppImage locally:
+Package Linux AppImages locally (x64 + arm64):
 
 ```bash
 pnpm --filter @bimanus/desktop run package:linux
+pnpm --filter @bimanus/desktop run package:linux:x64
+pnpm --filter @bimanus/desktop run package:linux:arm64
 ```
 
 Package a Windows x64 NSIS installer locally (run on Windows):

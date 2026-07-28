@@ -14,7 +14,7 @@ Bimanus 在 [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@e
 
 ## 状态
 
-- 公测阶段（macOS arm64、Linux AppImage、Windows NSIS）
+- 公测阶段（macOS arm64/x64、Linux AppImage x64/arm64、Windows NSIS）
 - 公开源代码仓库
 
 ## 功能特性
@@ -43,6 +43,31 @@ Bimanus 在 [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@e
 在 macOS 上，将 `Bimanus.app` 拖入 `/Applications` 并正常启动。发布版本已签名并公证。更新时下载新版本并替换 `/Applications` 中的旧应用即可。
 
 Linux 以 AppImage 形式发布。Windows 以 NSIS 安装包形式发布；默认使用应用内捆绑的 `pi` CLI 启动 TUI，因此仅打开 TUI 无需单独安装系统级 `pi`。
+
+### Linux 一键安装（x64 / arm64）
+
+完整说明见：**[docs/linux-install.zh.md](./docs/linux-install.zh.md)**（安装参数、目录结构、远程访问、更新、卸载、故障排查）。
+
+```bash
+# 安装（交互配置端口/密码，并打印局域网导入地址）
+curl -fsSL https://raw.githubusercontent.com/nexusonelw/bimanus/main/scripts/install-linux.sh | bash
+
+# 非交互安装
+curl -fsSL https://raw.githubusercontent.com/nexusonelw/bimanus/main/scripts/install-linux.sh | \
+  bash -s -- --yes --port 43174 --token 'your-secret'
+
+# 启动
+bimanus
+
+# 卸载（加 --purge 可同时删除 ~/.config/Bimanus）
+curl -fsSL https://raw.githubusercontent.com/nexusonelw/bimanus/main/scripts/uninstall-linux.sh | bash
+```
+
+安装完成后，在其他设备打开打印出的地址：
+
+```text
+http://<局域网IP>:<端口>/?token=<密码>
+```
 
 ### 通过 Homebrew（macOS）
 
@@ -96,7 +121,24 @@ pnpm run dev
 | `PI_APP_REMOTE_UI_PORT` | `43174` | 远程 UI HTTP/SSE 服务器端口 |
 | `PI_APP_REMOTE_UI_TOKEN` | 自动生成 | Bearer Token 鉴权 |
 
-当 `PI_APP_REMOTE_UI_TOKEN` 已设置或在设置面板中配置了 Token 时，远程桥接会在启动时自动开启。
+### 命令行参数（可选）
+
+打包后的二进制也支持远程 UI 启动参数。优先级：**CLI > 环境变量 > 设置页持久化**。
+
+```bash
+bimanus --remote-ui --remote-ui-host 0.0.0.0 --remote-ui-port 43174 --remote-ui-token '你的密钥'
+```
+
+| 参数 | 说明 |
+|------|------|
+| `--remote-ui` / `--no-remote-ui` | 强制开启 / 关闭远程桥接 |
+| `--remote-ui-host <addr>` | 绑定地址 |
+| `--remote-ui-port <n>` | HTTP/SSE 端口 |
+| `--remote-ui-token <s>` / `--remote-ui-password <s>` | Bearer Token / 访问密码 |
+
+当设置了 `PI_APP_REMOTE_UI_TOKEN`、命令行 token，或在设置面板中配置了 Token 时，远程桥接会在启动时自动开启。
+
+Linux 端安装到远程访问的完整流程见：[docs/linux-install.zh.md](./docs/linux-install.zh.md)。
 
 ### 工作原理
 
@@ -250,10 +292,13 @@ pnpm test
 
 桌面端 E2E 测试通道（lane）与配置详见 [`apps/desktop/README.md`](./apps/desktop/README.md)。默认桌面测试命令运行 `core` 通道；当你需要 `core`、`live`、`native` 时，使用 `pnpm --filter @bimanus/desktop run test:e2e:all`。
 
-本地打包 Linux AppImage：
+本地打包 Linux AppImage（x64 + arm64）：
 
 ```bash
 pnpm --filter @bimanus/desktop run package:linux
+# 或仅单一架构：
+pnpm --filter @bimanus/desktop run package:linux:x64
+pnpm --filter @bimanus/desktop run package:linux:arm64
 ```
 
 本地打包 Windows x64 NSIS 安装包（在 Windows 上运行）：
@@ -297,6 +342,8 @@ pnpm --filter @bimanus/desktop demo:readme
 - `packages/pi-sdk-driver` —— 从桌面应用到 `@earendil-works/pi-coding-agent` 的适配器
 - `packages/mcp-bridge-extension` —— 运行在 `pi` 代理运行时内的 MCP 桥接扩展
 - `packages/cli-adapter` —— 外部 CLI 代理（codex / claude-code / opencode）的适配器
+- `scripts/install-linux.sh` / `scripts/uninstall-linux.sh` —— Linux 一键安装 / 卸载
+- `docs/linux-install.zh.md` —— Linux 安装、远程访问与卸载指南
 
 ## 架构
 

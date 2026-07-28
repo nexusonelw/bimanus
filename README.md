@@ -14,7 +14,7 @@ This project is a fork of [`minghinmatthewlam/pi-gui`](https://github.com/minghi
 
 ## Status
 
-- Beta (macOS arm64, Linux AppImage, Windows NSIS)
+- Beta (macOS arm64/x64, Linux AppImage x64/arm64, Windows NSIS)
 - Public source repository
 
 ## Features
@@ -43,6 +43,31 @@ Download the latest `.dmg` (macOS), `.AppImage` (Linux), or `.exe` NSIS installe
 On macOS, drag `Bimanus.app` into `/Applications` and launch it. Releases are signed and notarized. To update, download the newer release and replace the app.
 
 Linux releases ship as AppImages. Windows releases ship as NSIS installers; the bundled `pi` CLI is used for TUI launches by default, so no separate system `pi` install is required just to open the TUI.
+
+### Linux one-line install (x64 / arm64)
+
+Full guide: **[docs/linux-install.md](./docs/linux-install.md)** (install options, paths, remote access, update, uninstall, troubleshooting).
+
+```bash
+# Install (prompts for remote port + password, prints LAN import URL)
+curl -fsSL https://raw.githubusercontent.com/nexusonelw/bimanus/main/scripts/install-linux.sh | bash
+
+# Non-interactive
+curl -fsSL https://raw.githubusercontent.com/nexusonelw/bimanus/main/scripts/install-linux.sh | \
+  bash -s -- --yes --port 43174 --token 'your-secret'
+
+# Start
+bimanus
+
+# Uninstall (add --purge to also remove ~/.config/Bimanus)
+curl -fsSL https://raw.githubusercontent.com/nexusonelw/bimanus/main/scripts/uninstall-linux.sh | bash
+```
+
+After install, open the printed URL on another device:
+
+```text
+http://<lan-ip>:<port>/?token=<password>
+```
 
 ### With Homebrew (macOS)
 
@@ -96,7 +121,24 @@ pnpm run dev
 | `PI_APP_REMOTE_UI_PORT` | `43174` | Port for the remote UI HTTP/SSE server |
 | `PI_APP_REMOTE_UI_TOKEN` | auto-generated | Bearer token for authentication |
 
-When `PI_APP_REMOTE_UI_TOKEN` is set or a token is configured in the settings panel, the remote bridge starts automatically on launch.
+### CLI flags (optional)
+
+Packaged / launched binaries also accept remote UI flags. Priority: **CLI > environment variables > Settings persistence**.
+
+```bash
+bimanus --remote-ui --remote-ui-host 0.0.0.0 --remote-ui-port 43174 --remote-ui-token 'your-secret-token'
+```
+
+| Flag | Description |
+|------|-------------|
+| `--remote-ui` / `--no-remote-ui` | Force enable / disable the bridge |
+| `--remote-ui-host <addr>` | Bind address |
+| `--remote-ui-port <n>` | HTTP/SSE port |
+| `--remote-ui-token <s>` / `--remote-ui-password <s>` | Bearer token / password |
+
+When `PI_APP_REMOTE_UI_TOKEN` is set, a CLI token is provided, or a token is configured in the settings panel, the remote bridge starts automatically on launch.
+
+Linux end-to-end install + remote-access workflow: [docs/linux-install.md](./docs/linux-install.md).
 
 ### How It Works
 
@@ -250,10 +292,13 @@ pnpm test
 
 Desktop E2E lanes and setup are documented in [`apps/desktop/README.md`](./apps/desktop/README.md). The default desktop test command runs the `core` lane; use `pnpm --filter @bimanus/desktop run test:e2e:all` when you need `core`, `live`, and `native`.
 
-Package a Linux AppImage locally:
+Package Linux AppImages locally (x64 + arm64):
 
 ```bash
 pnpm --filter @bimanus/desktop run package:linux
+# or one arch:
+pnpm --filter @bimanus/desktop run package:linux:x64
+pnpm --filter @bimanus/desktop run package:linux:arm64
 ```
 
 Package a Windows x64 NSIS installer locally (run on Windows):
@@ -297,6 +342,8 @@ pnpm --filter @bimanus/desktop demo:readme
 - `packages/pi-sdk-driver` — adapter from the desktop app to `@earendil-works/pi-coding-agent`
 - `packages/mcp-bridge-extension` — MCP bridge extension that runs inside the `pi` agent runtime
 - `packages/cli-adapter` — adapter for external CLI agents (codex / claude-code / opencode)
+- `scripts/install-linux.sh` / `scripts/uninstall-linux.sh` — Linux one-line install/uninstall
+- `docs/linux-install.md` — Linux install, remote access, and uninstall guide
 
 ## Architecture
 
