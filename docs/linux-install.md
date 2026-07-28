@@ -110,24 +110,33 @@ Ensure `~/.local/bin` is on your `PATH`:
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-## Launch
+## Launch (server remote-only — no Xvfb / no local window)
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"   # permanent: add to ~/.bashrc
 bimanus
+# equivalent:
+bimanus --headless
 ```
 
-Because the installer writes a token into `remote-ui.env` (and `ui-state.json`), the remote UI bridge starts automatically on launch.
+On machines without `DISPLAY`, the installer writes `PI_APP_HEADLESS=1` by default.  
+**Headless does not re-implement remote access** — it only skips the local BrowserWindow and keeps using the existing Remote UI bridge.
 
-### System libraries (minimal / headless servers)
+Open from your laptop:
 
-AppImage still needs Electron GUI runtime libraries. On a bare VPS you may see:
+```text
+http://<server-ip>:<port>/?token=<password>
+```
+
+### Runtime libraries (not a desktop environment, not Xvfb)
+
+Headless mode does **not** need Xvfb/DISPLAY, but the AppImage still links a few system shared libraries. If you see:
 
 ```text
 error while loading shared libraries: libatk-1.0.so.0: cannot open shared object file
 ```
 
-Install dependencies first.
+install libraries only (do not install a desktop):
 
 **Debian / Ubuntu:**
 
@@ -142,21 +151,11 @@ sudo apt-get install -y \
   libxshmfence1 libglib2.0-0 fonts-liberation ca-certificates
 ```
 
-**RHEL / CentOS / Fedora:**
+Then:
 
 ```bash
-sudo dnf install -y nss atk at-spi2-atk cups-libs libdrm gtk3 mesa-libgbm \
-  alsa-lib libXcomposite libXdamage libXrandr libxkbcommon pango cairo
+bimanus --headless
 ```
-
-**No graphical display (SSH-only server):**
-
-```bash
-sudo apt-get install -y xvfb
-xvfb-run -a bimanus
-```
-
-Remote UI can still be used from another device once the process is running.
 
 ### Override remote settings at launch (CLI)
 

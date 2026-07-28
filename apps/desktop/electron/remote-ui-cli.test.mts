@@ -41,3 +41,11 @@ test("applyRemoteUiCliArgsToEnv honors --no-remote-ui", () => {
   assert.equal(env.PI_APP_REMOTE_UI, "0");
   assert.equal(env.PI_APP_REMOTE_UI_TOKEN, "abc");
 });
+
+test("applyRemoteUiCliArgsToEnv enables headless remote-only mode", () => {
+  const env: NodeJS.ProcessEnv = {};
+  applyRemoteUiCliArgsToEnv(["--headless", "--remote-ui-token", "abc"], env);
+  assert.equal(env.PI_APP_HEADLESS, "1");
+  assert.equal(env.PI_APP_REMOTE_UI, "1");
+  assert.equal(env.PI_APP_REMOTE_UI_TOKEN, "abc");
+});

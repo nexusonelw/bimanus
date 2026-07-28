@@ -50,7 +50,7 @@ import {
 import { McpOAuthManager } from "./mcp-manager";
 import { DesktopMcpBridgeRuntime } from "./mcp-bridge-runtime";
 import { RemoteUiServer, type RemoteAgentInvokeRequest, type RemoteCodingAgent, type RemoteUiInvokeRequest } from "./remote-ui-server";
-import { applyRemoteUiCliArgsToEnv } from "./remote-ui-cli";
+import { applyRemoteUiCliArgsToEnv, isHeadlessMode } from "./remote-ui-cli";
 import { RemoteSystemService } from "./remote-system-service";
 import {
   configureTuiDiagnosticsLog,
@@ -79,8 +79,24 @@ const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
 const windowTestMode = resolveWindowTestMode();
 const devReloadMarkersEnabled = process.env.PI_APP_DEV_RELOAD_MARKERS === "1";
 const execFileAsync = promisify(execFile);
-// CLI flags override env for remote UI configuration (port/token/host).
+// CLI flags override env for remote UI configuration (port/token/host/headless).
 applyRemoteUiCliArgsToEnv(process.argv.slice(1));
+const headlessMode = isHeadlessMode();
+if (headlessMode) {
+  // Use Chromium ozone headless so Linux servers do not need Xvfb/DISPLAY.
+  // Still reuses the existing RemoteUiServer path — no second remote stack.
+  app.commandLine.appendSwitch("ozone-platform", "headless");
+  app.commandLine.appendSwitch("headless", "new");
+  app.commandLine.appendSwitch("disable-gpu");
+  app.commandLine.appendSwitch("disable-software-rasterizer");
+  // Root installs on servers commonly need this.
+  app.commandLine.appendSwitch("no-sandbox");
+  app.commandLine.appendSwitch("disable-dev-shm-usage");
+  app.disableHardwareAcceleration();
+  if (!process.env.PI_APP_REMOTE_UI?.trim()) {
+    process.env.PI_APP_REMOTE_UI = "1";
+  }
+}
 let store: DesktopAppStore;
 const themeManager = new ThemeManager();
 const remoteSystemService = new RemoteSystemService();
@@ -2394,6 +2410,10 @@ if (!hasSingleInstanceLock) {
 }
 
 app.on("second-instance", async () => {
+  if (headlessMode) {
+    console.log("pi-gui headless instance is already running (remote UI only).");
+    return;
+  }
   if (!store) {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.show();
@@ -2514,8 +2534,20 @@ app.whenReady().then(async () => {
   if (!isDev) {
     stopUpdateChecker = initUpdateChecker();
   }
+  if (headlessMode) {
+    console.log("pi-gui headless mode: skipping local BrowserWindow; remote UI only.");
+    if (!remoteUiEnabled()) {
+      console.error(
+        "Headless mode requires remote UI. Set PI_APP_REMOTE_UI_TOKEN / --remote-ui-token, or configure Settings remote password first.",
+      );
+      app.exit(1);
+      return;
+    }
+  }
   void startRemoteUiServer();
-  installCopySelectionContextMenu();
+  if (!headlessMode) {
+    installCopySelectionContextMenu();
+  }
 
   ipcMain.handle(desktopIpc.ping, () =>
     devReloadMarkersEnabled ? `pi desktop ready:${MAIN_DEV_RELOAD_MARKER}` : "pi desktop ready",
@@ -2969,10 +3001,18 @@ app.whenReady().then(async () => {
     window.maximize();
   });
 
-  createAppWindow();
-  void notificationPermissionService.getCurrentStatus();
+  if (!headlessMode) {
+    createAppWindow();
+    void notificationPermissionService.getCurrentStatus();
+  } else {
+    // Keep the process alive without a window; remote clients drive the app.
+    console.log("pi-gui headless ready. Connect via the remote UI URL (token required).");
+  }
 
   app.on("activate", () => {
+    if (headlessMode) {
+      return;
+    }
     if (BrowserWindow.getAllWindows().length === 0) {
       createAppWindow();
       void notificationPermissionService?.getCurrentStatus();
@@ -2981,6 +3021,10 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
+  // Headless remote-only mode has no windows; never quit just because of that.
+  if (headlessMode) {
+    return;
+  }
   if (process.platform !== "darwin") {
     stopNotifications?.();
     stopNotifications = undefined;

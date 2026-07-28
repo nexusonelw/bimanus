@@ -110,24 +110,34 @@ bash scripts/install-linux.sh --yes
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-## 启动
+## 启动（服务器远程-only，不需要 Xvfb / 本地窗口）
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"   # 永久生效可写入 ~/.bashrc
 bimanus
+# 等价于：
+bimanus --headless
 ```
 
-安装脚本会把 token 写入 `remote-ui.env` 与 `ui-state.json`，因此启动后远程 UI 桥接会自动开启。
+无 `DISPLAY` 的机器上，安装脚本会默认写入 `PI_APP_HEADLESS=1`。  
+**headless 不会重新实现远程访问**，只是不创建本地窗口，继续使用项目已有的 Remote UI。
 
-### 系统依赖（精简版 / 无桌面服务器）
+本地电脑访问：
 
-AppImage 仍依赖 Electron 的图形运行库。裸 VPS 上常见报错：
+```text
+http://<服务器IP>:<端口>/?token=<密码>
+```
+
+### 运行库（不是桌面环境，也不是 Xvfb）
+
+headless 模式**不需要** Xvfb / 图形桌面，但 AppImage 仍要链接少量系统共享库。  
+若看到：
 
 ```text
 error while loading shared libraries: libatk-1.0.so.0: cannot open shared object file
 ```
 
-先安装系统库。
+只需装库，不要装桌面：
 
 **Debian / Ubuntu：**
 
@@ -142,21 +152,11 @@ sudo apt-get install -y \
   libxshmfence1 libglib2.0-0 fonts-liberation ca-certificates
 ```
 
-**RHEL / CentOS / Fedora：**
+然后直接：
 
 ```bash
-sudo dnf install -y nss atk at-spi2-atk cups-libs libdrm gtk3 mesa-libgbm \
-  alsa-lib libXcomposite libXdamage libXrandr libxkbcommon pango cairo
+bimanus --headless
 ```
-
-**没有图形界面（纯 SSH 服务器）：**
-
-```bash
-sudo apt-get install -y xvfb
-xvfb-run -a bimanus
-```
-
-进程跑起来后，仍可在其他设备用远程 UI 访问。
 
 ### 启动时用命令行覆盖远程配置
 

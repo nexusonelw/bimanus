@@ -8,6 +8,7 @@
  *   --remote-ui-token <s> | --remote-ui-token=<s>
  *   --remote-ui-password <s> | --remote-ui-password=<s>  (alias of token)
  *   --remote-ui-host <s> | --remote-ui-host=<s>
+ *   --headless / --headless=1|0|true|false
  *   --no-remote-ui
  */
 
@@ -16,6 +17,7 @@ export interface RemoteUiCliOptions {
   readonly port?: number;
   readonly token?: string;
   readonly host?: string;
+  readonly headless?: boolean;
 }
 
 function readValue(argv: readonly string[], index: number, flag: string): { value: string; nextIndex: number } | null {
@@ -49,6 +51,7 @@ export function parseRemoteUiCliArgs(argv: readonly string[]): RemoteUiCliOption
   let port: number | undefined;
   let token: string | undefined;
   let host: string | undefined;
+  let headless: boolean | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -59,6 +62,16 @@ export function parseRemoteUiCliArgs(argv: readonly string[]): RemoteUiCliOption
 
     if (arg === "--no-remote-ui") {
       enable = false;
+      continue;
+    }
+
+    if (arg === "--headless") {
+      headless = true;
+      continue;
+    }
+
+    if (arg === "--no-headless") {
+      headless = false;
       continue;
     }
 
@@ -95,6 +108,13 @@ export function parseRemoteUiCliArgs(argv: readonly string[]): RemoteUiCliOption
     if (hostValue) {
       host = hostValue.value.trim();
       index = hostValue.nextIndex;
+      continue;
+    }
+
+    const headlessValue = readValue(argv, index, "--headless");
+    if (headlessValue) {
+      headless = parseBooleanFlag(headlessValue.value);
+      index = headlessValue.nextIndex;
     }
   }
 
@@ -103,6 +123,7 @@ export function parseRemoteUiCliArgs(argv: readonly string[]): RemoteUiCliOption
     ...(port === undefined ? {} : { port }),
     ...(token === undefined ? {} : { token }),
     ...(host === undefined ? {} : { host }),
+    ...(headless === undefined ? {} : { headless }),
   };
 }
 
@@ -132,6 +153,26 @@ export function applyRemoteUiCliArgsToEnv(
   if (options.host !== undefined) {
     env.PI_APP_REMOTE_UI_HOST = options.host;
   }
+  if (options.headless === true) {
+    env.PI_APP_HEADLESS = "1";
+    // Headless server mode only makes sense with the existing remote UI bridge.
+    if (env.PI_APP_REMOTE_UI !== "0") {
+      env.PI_APP_REMOTE_UI = "1";
+    }
+  } else if (options.headless === false) {
+    env.PI_APP_HEADLESS = "0";
+  }
 
   return options;
+}
+
+export function isHeadlessMode(env: NodeJS.ProcessEnv = process.env): boolean {
+  const configured = env.PI_APP_HEADLESS?.trim().toLowerCase();
+  if (configured === "1" || configured === "true" || configured === "yes" || configured === "on") {
+    return true;
+  }
+  if (configured === "0" || configured === "false" || configured === "no" || configured === "off") {
+    return false;
+  }
+  return false;
 }
