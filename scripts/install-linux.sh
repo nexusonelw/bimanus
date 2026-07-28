@@ -641,9 +641,8 @@ EOF
   info "Import:    $import_url"
   printf '\n'
   info "Start on this machine:"
+  info "  export PATH=\"${BIN_DIR}:\$PATH\"   # add to ~/.bashrc to make permanent"
   info "  bimanus"
-  info "If 'bimanus' is not found, add to PATH:"
-  info "  export PATH=\"${BIN_DIR}:\$PATH\""
   printf '\n'
   info "Override at launch (optional):"
   info "  bimanus --remote-ui-port 43174 --remote-ui-token 'secret'"
@@ -653,8 +652,22 @@ EOF
     info "Remote bridge starts automatically because a token is configured."
   fi
   printf '\n'
+  info "$(bold "System libraries (required on minimal servers)")"
+  info "If launch fails with missing .so (e.g. libatk-1.0.so.0), install GUI runtime deps:"
+  info "  # Debian / Ubuntu"
+  info "  sudo apt-get update && sudo apt-get install -y \\"
+  info "    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \\"
+  info "    libgtk-3-0 libgbm1 libasound2t64 || true; sudo apt-get install -y \\"
+  info "    libasound2 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \\"
+  info "    libxkbcommon0 libpango-1.0-0 libcairo2 libx11-xcb1 libxcb-dri3-0 \\"
+  info "    libxshmfence1 libglib2.0-0 fonts-liberation ca-certificates"
+  info "  # RHEL / CentOS / Fedora"
+  info "  sudo dnf install -y nss atk at-spi2-atk cups-libs libdrm gtk3 mesa-libgbm \\"
+  info "    alsa-lib libXcomposite libXdamage libXrandr libxkbcommon pango cairo"
+  info "Headless (no display) may also need: sudo apt-get install -y xvfb && xvfb-run -a bimanus"
+  printf '\n'
   info "Uninstall later:"
-  info "  curl -fsSL https://raw.githubusercontent.com/nexusonelw/bimanus/main/scripts/uninstall-linux.sh | bash"
+  info "  curl -fsSL https://cdn.jsdelivr.net/gh/nexusonelw/bimanus@main/scripts/uninstall-linux.sh | bash"
   info "  # add --purge to also remove ${CONFIG_DIR}"
   printf '\n'
 }
