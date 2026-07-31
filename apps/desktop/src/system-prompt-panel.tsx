@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import type { DesktopAppState, SystemPromptRecord } from "./desktop-state";
 import { ArchiveIcon } from "./icons";
 import type { PiDesktopApi } from "./ipc";
@@ -12,10 +12,11 @@ interface SystemPromptPanelProps {
     setSnapshot: Dispatch<SetStateAction<DesktopAppState | null>>,
     action: () => Promise<DesktopAppState>,
   ) => Promise<DesktopAppState>;
+  readonly resizeHandles?: ReactNode;
 }
 
 export function SystemPromptPanel(props: SystemPromptPanelProps) {
-  const { api, setSnapshot, updateSnapshot } = props;
+  const { api, setSnapshot, updateSnapshot, resizeHandles } = props;
   const { t } = useI18n();
   const [prompts, setPrompts] = useState<readonly SystemPromptRecord[]>([]);
   const [activePromptId, setActivePromptId] = useState<string | undefined>(undefined);
@@ -76,6 +77,7 @@ export function SystemPromptPanel(props: SystemPromptPanelProps) {
 
   return (
     <aside className="system-prompt-panel">
+      {resizeHandles}
       <div className="system-prompt-panel__header">
         <h2 className="system-prompt-panel__title">
           {activePrompt ? t("systemPrompt.edit") : t("systemPrompt.title")}

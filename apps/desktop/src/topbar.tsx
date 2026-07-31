@@ -1,6 +1,6 @@
 import type { MouseEvent as ReactMouseEvent, Dispatch, ReactNode, SetStateAction } from "react";
 import type { AppView, DesktopAppState, SessionRecord, WorkspaceRecord, WorktreeRecord } from "./desktop-state";
-import { DiffIcon, SparkIcon, SplitPanelIcon, TerminalIcon } from "./icons";
+import { DiffIcon, FilePreviewIcon, FolderIcon, SparkIcon, SplitPanelIcon, TerminalIcon } from "./icons";
 import { getDesktopShortcutLabel, type PiDesktopApi } from "./ipc";
 import type { WorkspaceMenuState } from "./hooks/use-workspace-menu";
 import { SidebarToggleButton } from "./sidebar-toggle-button";
@@ -28,6 +28,12 @@ interface TopbarProps {
   readonly onToggleTerminal: () => void;
   readonly showDiffPanel: boolean;
   readonly onToggleDiffPanel: () => void;
+  readonly fileManagerAvailable: boolean;
+  readonly showFileManager: boolean;
+  readonly onToggleFileManager: () => void;
+  readonly filePreviewAvailable: boolean;
+  readonly showFilePreview: boolean;
+  readonly onToggleFilePreview: () => void;
   readonly showSystemPromptPanel: boolean;
   readonly onToggleSystemPromptPanel: () => void;
   readonly showSplitPanel: boolean;
@@ -50,6 +56,12 @@ interface HeaderActionsProps {
   readonly onToggleTerminal: () => void;
   readonly showDiffPanel: boolean;
   readonly onToggleDiffPanel: () => void;
+  readonly fileManagerAvailable: boolean;
+  readonly showFileManager: boolean;
+  readonly onToggleFileManager: () => void;
+  readonly filePreviewAvailable: boolean;
+  readonly showFilePreview: boolean;
+  readonly onToggleFilePreview: () => void;
   readonly showSystemPromptPanel: boolean;
   readonly onToggleSystemPromptPanel: () => void;
   readonly showSplitPanel: boolean;
@@ -73,6 +85,12 @@ export function HeaderActions(props: HeaderActionsProps): ReactNode {
     onToggleTerminal,
     showDiffPanel,
     onToggleDiffPanel,
+    fileManagerAvailable,
+    showFileManager,
+    onToggleFileManager,
+    filePreviewAvailable,
+    showFilePreview,
+    onToggleFilePreview,
     showSystemPromptPanel,
     onToggleSystemPromptPanel,
     showSplitPanel,
@@ -109,6 +127,26 @@ export function HeaderActions(props: HeaderActionsProps): ReactNode {
           <DiffIcon />
           <span>{t("topbar.toggleChanges")}</span>
           <kbd className="header-action-menu-item__kbd">{diffShortcut}</kbd>
+        </button>
+        <button
+          type="button"
+          className="terminal-panel__dropdown-item header-action-menu-item"
+          aria-label={t("topbar.toggleFileManager")}
+          disabled={!fileManagerAvailable}
+          onClick={onToggleFileManager}
+        >
+          <FolderIcon />
+          <span>{t("topbar.toggleFileManager")}</span>
+        </button>
+        <button
+          type="button"
+          className="terminal-panel__dropdown-item header-action-menu-item"
+          aria-label={t("topbar.toggleFilePreview")}
+          disabled={!filePreviewAvailable}
+          onClick={onToggleFilePreview}
+        >
+          <FilePreviewIcon />
+          <span>{t("topbar.toggleFilePreview")}</span>
         </button>
         <button
           type="button"
@@ -166,6 +204,34 @@ export function HeaderActions(props: HeaderActionsProps): ReactNode {
       </div>
       <div className="shortcut-tooltip-wrap">
         <button
+          aria-label={t("topbar.toggleFileManager")}
+          className={`icon-button ${buttonClassName} ${showFileManager ? "icon-button--active" : ""}`}
+          type="button"
+          disabled={!fileManagerAvailable}
+          onClick={onToggleFileManager}
+        >
+          <FolderIcon />
+        </button>
+        <span className={`shortcut-tooltip ${tooltipClassName}`} role="tooltip">
+          <span>{t("topbar.toggleFileManager")}</span>
+        </span>
+      </div>
+      <div className="shortcut-tooltip-wrap">
+        <button
+          aria-label={t("topbar.toggleFilePreview")}
+          className={`icon-button ${buttonClassName} ${showFilePreview ? "icon-button--active" : ""}`}
+          type="button"
+          disabled={!filePreviewAvailable}
+          onClick={onToggleFilePreview}
+        >
+          <FilePreviewIcon />
+        </button>
+        <span className={`shortcut-tooltip ${tooltipClassName}`} role="tooltip">
+          <span>{t("topbar.toggleFilePreview")}</span>
+        </span>
+      </div>
+      <div className="shortcut-tooltip-wrap">
+        <button
           aria-label={t("topbar.toggleSystemPrompt")}
           className={`icon-button ${buttonClassName} ${showSystemPromptPanel ? "icon-button--active" : ""}`}
           type="button"
@@ -214,6 +280,12 @@ export function Topbar(props: TopbarProps) {
     onToggleTerminal,
     showDiffPanel,
     onToggleDiffPanel,
+    fileManagerAvailable,
+    showFileManager,
+    onToggleFileManager,
+    filePreviewAvailable,
+    showFilePreview,
+    onToggleFilePreview,
     showSystemPromptPanel,
     onToggleSystemPromptPanel,
     showSplitPanel,
@@ -324,6 +396,12 @@ export function Topbar(props: TopbarProps) {
           onToggleTerminal={onToggleTerminal}
           showDiffPanel={showDiffPanel}
           onToggleDiffPanel={onToggleDiffPanel}
+          fileManagerAvailable={fileManagerAvailable}
+          showFileManager={showFileManager}
+          onToggleFileManager={onToggleFileManager}
+          filePreviewAvailable={filePreviewAvailable}
+          showFilePreview={showFilePreview}
+          onToggleFilePreview={onToggleFilePreview}
           showSystemPromptPanel={showSystemPromptPanel}
           onToggleSystemPromptPanel={onToggleSystemPromptPanel}
           showSplitPanel={showSplitPanel}

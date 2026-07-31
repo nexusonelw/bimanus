@@ -33,6 +33,9 @@ import {
   type TerminalSize,
   type GitCommitDetails,
   type GitCommitHistoryEntry,
+  type WorkspaceDirectoryEntry,
+  type WorkspaceFileContent,
+  type WorkspaceFileWriteResult,
 } from "./ipc";
 import { isElectronHost } from "./platform-env";
 import { safeRandomUuid } from "./utils/uuid";
@@ -254,6 +257,8 @@ function installRemoteClient(): void {
     setActiveView: (view: AppView) => invoke<DesktopAppState>(desktopIpc.setActiveView, view),
     setSidebarCollapsed: (collapsed: boolean) => invoke<DesktopAppState>(desktopIpc.setSidebarCollapsed, collapsed),
     setSidebarWidth: (sidebarWidth: number) => invoke<DesktopAppState>(desktopIpc.setSidebarWidth, sidebarWidth),
+    setRightPanelWidths: (rightPanelWidths: DesktopAppState["rightPanelWidths"]) =>
+      invoke<DesktopAppState>(desktopIpc.setRightPanelWidths, rightPanelWidths),
     refreshRuntime: (workspaceId?: string) => invoke<DesktopAppState>(desktopIpc.refreshRuntime, workspaceId),
     setDefaultModel: (workspaceId: string | undefined, provider: string, modelId: string) =>
       invoke<DesktopAppState>(desktopIpc.setDefaultModel, workspaceId, provider, modelId),
@@ -383,12 +388,22 @@ function installRemoteClient(): void {
         options,
       ),
     listWorkspaceFiles: (workspaceId: string) => invoke<string[]>(desktopIpc.listWorkspaceFiles, workspaceId),
+    listWorkspaceDirectory: (workspaceId: string, relativePath = "") =>
+      invoke<readonly WorkspaceDirectoryEntry[]>(
+        desktopIpc.listWorkspaceDirectory,
+        workspaceId,
+        relativePath,
+      ),
     getChangedFiles: (workspaceId: string) =>
       invoke<{ path: string; status: "added" | "modified" | "deleted" | "untracked" }[]>(
         desktopIpc.getChangedFiles,
         workspaceId,
       ),
     getFileDiff: (workspaceId: string, filePath: string) => invoke<string>(desktopIpc.getFileDiff, workspaceId, filePath),
+    readWorkspaceFile: (workspaceId: string, filePath: string) =>
+      invoke<WorkspaceFileContent>(desktopIpc.readWorkspaceFile, workspaceId, filePath),
+    writeWorkspaceFile: (workspaceId: string, filePath: string, content: string) =>
+      invoke<WorkspaceFileWriteResult>(desktopIpc.writeWorkspaceFile, workspaceId, filePath, content),
     listCommitHistory: (workspaceId: string) =>
       invoke<GitCommitHistoryEntry[]>(desktopIpc.listCommitHistory, workspaceId),
     getCommitDetails: (workspaceId: string, commitHash: string) =>

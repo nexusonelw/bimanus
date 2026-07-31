@@ -41,6 +41,8 @@ import {
   createEmptyDesktopAppState,
   DEFAULT_SIDEBAR_WIDTH,
   DEFAULT_SURFACE_BG_COLOR,
+  DEFAULT_RIGHT_PANEL_WIDTHS,
+  normalizeRightPanelWidths,
   normalizeRemoteUiPort,
   normalizeSidebarWidth,
   normalizeSurfaceBgColor,
@@ -572,6 +574,28 @@ export class DesktopAppStore implements AppStoreInternals {
     this.state = {
       ...this.state,
       sidebarWidth: nextSidebarWidth,
+      lastError: undefined,
+      revision: this.state.revision + 1,
+    };
+    await this.persistUiState();
+    return this.emit();
+  }
+
+  async setRightPanelWidths(rightPanelWidths: DesktopAppState["rightPanelWidths"]): Promise<DesktopAppState> {
+    await this.initialize();
+    const nextRightPanelWidths = normalizeRightPanelWidths(rightPanelWidths);
+    const currentRightPanelWidths = this.state.rightPanelWidths;
+    if (
+      currentRightPanelWidths.diff === nextRightPanelWidths.diff &&
+      currentRightPanelWidths.filePreview === nextRightPanelWidths.filePreview &&
+      currentRightPanelWidths.fileManager === nextRightPanelWidths.fileManager &&
+      currentRightPanelWidths.systemPrompt === nextRightPanelWidths.systemPrompt
+    ) {
+      return structuredClone(this.state);
+    }
+    this.state = {
+      ...this.state,
+      rightPanelWidths: nextRightPanelWidths,
       lastError: undefined,
       revision: this.state.revision + 1,
     };
@@ -1376,6 +1400,7 @@ export class DesktopAppStore implements AppStoreInternals {
         workspaceOrder: persisted.workspaceOrder ?? [],
         sidebarCollapsed: persisted.sidebarCollapsed ?? this.state.sidebarCollapsed,
         sidebarWidth: normalizeSidebarWidth(persisted.sidebarWidth ?? this.state.sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH),
+        rightPanelWidths: normalizeRightPanelWidths(persisted.rightPanelWidths ?? DEFAULT_RIGHT_PANEL_WIDTHS),
         enableTransparency: persisted.enableTransparency ?? this.state.enableTransparency,
         tuiBgColor: normalizeSurfaceBgColor(
           persisted.tuiBgColor ?? this.state.tuiBgColor,
@@ -2339,6 +2364,7 @@ export class DesktopAppStore implements AppStoreInternals {
       ),
       sidebarCollapsed: this.state.sidebarCollapsed || undefined,
       sidebarWidth: this.state.sidebarWidth,
+      rightPanelWidths: this.state.rightPanelWidths,
       enableTransparency: this.state.enableTransparency,
       tuiBgColor: this.state.tuiBgColor,
       splitPanelBgColor: this.state.splitPanelBgColor,

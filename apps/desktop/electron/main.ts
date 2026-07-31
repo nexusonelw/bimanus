@@ -13,7 +13,8 @@ import {
 } from "electron";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
-import { stat } from "node:fs/promises";
+import { stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
@@ -30,7 +31,7 @@ import {
   listRemoteBranches,
   pushRemoteBranch,
 } from "./app-store-diff";
-import { listWorkspaceFiles } from "./app-store-files";
+import { listWorkspaceDirectory, listWorkspaceFiles, readWorkspaceFile, writeWorkspaceFile } from "./app-store-files";
 import { MAIN_DEV_RELOAD_MARKER } from "./dev-reload-main-probe";
 import { NotificationManager } from "./notification-manager";
 import {
@@ -109,6 +110,27 @@ let notificationPermissionService: NotificationPermissionService | undefined;
 let terminalService: TerminalService | undefined;
 let remoteUiServer: RemoteUiServer | undefined;
 let integratedTerminalShell = "";
+
+async function readClipboardTextOrImagePath(): Promise<string> {
+  const text = clipboard.readText();
+  if (text) {
+    return text;
+  }
+
+  const image = clipboard.readImage();
+  if (image.isEmpty()) {
+    return "";
+  }
+
+  const imagePath = path.join(tmpdir(), `pi-gui-clipboard-${randomUUID()}.png`);
+  try {
+    await writeFile(imagePath, image.toPNG());
+    return imagePath;
+  } catch (error) {
+    console.warn("[pi-gui] Failed to save clipboard image:", error);
+    return "";
+  }
+}
 
 interface WindowViewState {
   readonly selectedWorkspaceId: string;
@@ -2056,6 +2078,10 @@ async function handleRemoteUiInvoke(request: RemoteUiInvokeRequest): Promise<unk
       return runRemoteScopedForClient(client.id, () => store.setSidebarCollapsed(Boolean(args[0])));
     case desktopIpc.setSidebarWidth:
       return runRemoteScopedForClient(client.id, () => store.setSidebarWidth(Number(args[0])));
+    case desktopIpc.setRightPanelWidths:
+      return runRemoteScopedForClient(client.id, () =>
+        store.setRightPanelWidths(args[0] as DesktopAppState["rightPanelWidths"]),
+      );
     case desktopIpc.refreshRuntime:
       return runRemoteScopedForClient(client.id, () => store.refreshRuntime(toOptionalWorkspaceId(args[0])));
     case desktopIpc.setSessionModel:
@@ -2194,7 +2220,7 @@ async function handleRemoteUiInvoke(request: RemoteUiInvokeRequest): Promise<unk
     case desktopIpc.cancelCurrentRun:
       return runRemoteScopedForClientNow(client.id, () => store.cancelCurrentRun());
     case desktopIpc.readClipboardText:
-      return clipboard.readText();
+      return readClipboardTextOrImagePath();
     case desktopIpc.getSessionTree:
       return store.getSessionTree(args[0] as WorkspaceSessionTarget);
     case desktopIpc.navigateSessionTree:
@@ -2205,6 +2231,10 @@ async function handleRemoteUiInvoke(request: RemoteUiInvokeRequest): Promise<unk
       const workspacePath = store.getWorkspacePath(String(args[0] ?? ""));
       return workspacePath ? listWorkspaceFiles(workspacePath) : [];
     }
+    case desktopIpc.listWorkspaceDirectory: {
+      const workspacePath = store.getWorkspacePath(String(args[0] ?? ""));
+      return workspacePath ? listWorkspaceDirectory(workspacePath, String(args[1] ?? "")) : [];
+    }
     case desktopIpc.getChangedFiles: {
       const workspacePath = store.getWorkspacePath(String(args[0] ?? ""));
       return workspacePath ? getChangedFiles(workspacePath) : [];
@@ -2212,6 +2242,20 @@ async function handleRemoteUiInvoke(request: RemoteUiInvokeRequest): Promise<unk
     case desktopIpc.getFileDiff: {
       const workspacePath = store.getWorkspacePath(String(args[0] ?? ""));
       return workspacePath ? getFileDiff(workspacePath, String(args[1] ?? "")) : "";
+    }
+    case desktopIpc.readWorkspaceFile: {
+      const workspacePath = store.getWorkspacePath(String(args[0] ?? ""));
+      if (!workspacePath) {
+        throw new Error(`Unknown workspace: ${String(args[0] ?? "")}`);
+      }
+      return readWorkspaceFile(workspacePath, String(args[1] ?? ""));
+    }
+    case desktopIpc.writeWorkspaceFile: {
+      const workspacePath = store.getWorkspacePath(String(args[0] ?? ""));
+      if (!workspacePath) {
+        return { saved: false, error: "Unknown workspace" };
+      }
+      return writeWorkspaceFile(workspacePath, String(args[1] ?? ""), String(args[2] ?? ""));
     }
     case desktopIpc.listCommitHistory: {
       const workspacePath = store.getWorkspacePath(String(args[0] ?? ""));
@@ -2653,6 +2697,9 @@ app.whenReady().then(async () => {
   ipcMain.handle(desktopIpc.setSidebarWidth, (event, sidebarWidth: number) =>
     runWindowScopedForEvent(event, () => store.setSidebarWidth(sidebarWidth)),
   );
+  ipcMain.handle(desktopIpc.setRightPanelWidths, (event, rightPanelWidths) =>
+    runWindowScopedForEvent(event, () => store.setRightPanelWidths(rightPanelWidths)),
+  );
   ipcMain.handle(desktopIpc.refreshRuntime, (event, workspaceId?: string) =>
     runWindowScopedForEvent(event, () => store.refreshRuntime(toOptionalWorkspaceId(workspaceId))),
   );
@@ -2907,7 +2954,7 @@ app.whenReady().then(async () => {
   ipcMain.handle(desktopIpc.cancelCurrentRun, (event) =>
     runPreemptiveWindowScopedForEvent(event, () => store.cancelCurrentRun()),
   );
-  ipcMain.handle(desktopIpc.readClipboardText, () => clipboard.readText());
+  ipcMain.handle(desktopIpc.readClipboardText, () => readClipboardTextOrImagePath());
   ipcMain.handle(desktopIpc.getSessionTree, (_event, target: WorkspaceSessionTarget) =>
     store.getSessionTree(target),
   );
@@ -2925,6 +2972,13 @@ app.whenReady().then(async () => {
     }
     return listWorkspaceFiles(workspacePath);
   });
+  ipcMain.handle(
+    desktopIpc.listWorkspaceDirectory,
+    async (_event, workspaceId: string, relativePath = "") => {
+      const workspacePath = store.getWorkspacePath(workspaceId);
+      return workspacePath ? listWorkspaceDirectory(workspacePath, relativePath) : [];
+    },
+  );
   ipcMain.handle(desktopIpc.getChangedFiles, async (_event, workspaceId: string) => {
     const workspacePath = store.getWorkspacePath(workspaceId);
     if (!workspacePath) {
@@ -2939,6 +2993,23 @@ app.whenReady().then(async () => {
     }
     return getFileDiff(workspacePath, filePath);
   });
+  ipcMain.handle(desktopIpc.readWorkspaceFile, async (_event, workspaceId: string, filePath: string) => {
+    const workspacePath = store.getWorkspacePath(workspaceId);
+    if (!workspacePath) {
+      throw new Error(`Unknown workspace: ${workspaceId}`);
+    }
+    return readWorkspaceFile(workspacePath, filePath);
+  });
+  ipcMain.handle(
+    desktopIpc.writeWorkspaceFile,
+    async (_event, workspaceId: string, filePath: string, content: string) => {
+      const workspacePath = store.getWorkspacePath(workspaceId);
+      if (!workspacePath) {
+        return { saved: false, error: "Unknown workspace" };
+      }
+      return writeWorkspaceFile(workspacePath, filePath, content);
+    },
+  );
   ipcMain.handle(desktopIpc.listCommitHistory, async (_event, workspaceId: string) => {
     const workspacePath = store.getWorkspacePath(workspaceId);
     return workspacePath ? listCommitHistory(workspacePath) : [];

@@ -9,6 +9,7 @@ import {
   DEFAULT_SURFACE_BG_COLOR,
   normalizeLocale,
   normalizeRemoteUiPort,
+  normalizeRightPanelWidths,
   normalizeSurfaceBgColor,
   normalizeTuiTabLimit,
 } from "../src/desktop-state";
@@ -50,6 +51,7 @@ export interface PersistedUiState {
   readonly mcpServers?: readonly PersistedMcpServerConfig[];
   readonly sidebarCollapsed?: boolean;
   readonly sidebarWidth?: number;
+  readonly rightPanelWidths?: Readonly<Record<string, number>>;
   readonly allowMultiple?: boolean;
   readonly enableTransparency?: boolean;
   /** Background color for adaptive TUI terminal surfaces (hex). */
@@ -122,6 +124,7 @@ export async function readPersistedUiState(uiStateFilePath: string): Promise<Leg
       sidebarWidth: typeof parsed.sidebarWidth === "number" && Number.isFinite(parsed.sidebarWidth)
         ? parsed.sidebarWidth
         : undefined,
+      rightPanelWidths: normalizeRightPanelWidths(parsed.rightPanelWidths),
       allowMultiple: typeof parsed.allowMultiple === "boolean" ? parsed.allowMultiple : undefined,
       enableTransparency: typeof parsed.enableTransparency === "boolean" ? parsed.enableTransparency : undefined,
       tuiBgColor:

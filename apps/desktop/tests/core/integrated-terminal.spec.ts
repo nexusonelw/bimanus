@@ -727,6 +727,40 @@ test("pastes clipboard text into the integrated terminal once", async () => {
   }
 });
 
+test("pastes a clipboard image into the integrated terminal as a file path", async () => {
+  const userDataDir = await makeUserDataDir();
+  const workspacePath = await makeWorkspace("terminal-image-paste");
+  const harness = await launchDesktop(userDataDir, {
+    initialWorkspaces: [workspacePath],
+    testMode: "background",
+  });
+
+  try {
+    const window = await harness.firstWindow();
+    await waitForWorkspaceByPath(window, workspacePath);
+    await createNamedThread(window, "Terminal image paste thread");
+
+    await window.getByLabel("Toggle terminal").click();
+    const terminal = window.getByTestId("integrated-terminal");
+    await terminal.locator(".xterm").click();
+    await expect(terminal.locator(".xterm-rows")).toContainText(
+      new RegExp(`${escapeRegExp(basename(workspacePath))}|[#$%]\\s*$`),
+      { timeout: 15_000 },
+    );
+
+    await harness.electronApp.evaluate(({ clipboard, nativeImage }, pngBase64) => {
+      clipboard.writeImage(nativeImage.createFromDataURL(`data:image/png;base64,${pngBase64}`));
+    }, TINY_PNG_BASE64);
+    await window.keyboard.press(process.platform === "darwin" ? desktopShortcut("V") : "Shift+Insert");
+
+    await expect(terminal.locator(".xterm-rows")).toContainText(/pi-gui-clipboard-[a-f0-9-]+\\.png/, {
+      timeout: 15_000,
+    });
+  } finally {
+    await harness.close();
+  }
+});
+
 function countOccurrences(value: string, needle: string): number {
   let count = 0;
   let index = value.indexOf(needle);

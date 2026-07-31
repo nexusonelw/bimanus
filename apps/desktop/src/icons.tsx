@@ -135,6 +135,20 @@ export function FileIcon() {
   );
 }
 
+export function FilePreviewIcon() {
+  return (
+    <Icon>
+      <path
+        d="M10 5.2c3.6 0 6.2 2.6 7.1 4.3.15.28.15.62 0 .9-.9 1.7-3.5 4.3-7.1 4.3s-6.2-2.6-7.1-4.3a1.02 1.02 0 0 1 0-.9C3.8 7.8 6.4 5.2 10 5.2Z"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="1.35"
+      />
+      <circle cx="10" cy="10" r="2.1" stroke="currentColor" strokeWidth="1.35" />
+    </Icon>
+  );
+}
+
 export function ArchiveIcon() {
   return (
     <Icon>

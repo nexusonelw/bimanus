@@ -25,6 +25,37 @@ export type DesktopNotificationPermissionStatus =
   | "unsupported"
   | "unknown";
 
+export interface WorkspaceDirectoryEntry {
+  readonly name: string;
+  readonly path: string;
+  readonly kind: "file" | "directory";
+}
+
+/**
+ * Coarse content classification used by the file preview panel to decide how
+ * to render a file: Monaco editor (text), <img> (image), <video> (video),
+ * webview/iframe (html), or an "unsupported" fallback (binary).
+ */
+export type WorkspaceFileKind = "text" | "image" | "video" | "html" | "binary";
+
+export interface WorkspaceFileContent {
+  readonly path: string;
+  readonly kind: WorkspaceFileKind;
+  readonly mimeType: string;
+  readonly size: number;
+  /** UTF-8 text content, present for "text" and "html" kinds. */
+  readonly content?: string;
+  /** `data:<mime>;base64,...` URL, present for "image" and "video" kinds. */
+  readonly dataUrl?: string;
+  /** True when the returned content/dataUrl was truncated because the file was too large. */
+  readonly truncated?: boolean;
+}
+
+export interface WorkspaceFileWriteResult {
+  readonly saved: boolean;
+  readonly error?: string;
+}
+
 export const desktopIpc = {
   stateRequest: "pi-gui:state-request",
   stateChanged: "pi-gui:state-changed",
@@ -55,6 +86,7 @@ export const desktopIpc = {
   setActiveView: "pi-gui:set-active-view",
   setSidebarCollapsed: "pi-gui:set-sidebar-collapsed",
   setSidebarWidth: "pi-gui:set-sidebar-width",
+  setRightPanelWidths: "pi-gui:set-right-panel-widths",
   refreshRuntime: "pi-gui:refresh-runtime",
   setDefaultModel: "pi-gui:set-default-model",
   setDefaultThinkingLevel: "pi-gui:set-default-thinking-level",
@@ -112,8 +144,11 @@ export const desktopIpc = {
   navigateSessionTree: "pi-gui:navigate-session-tree",
   toggleWindowMaximize: "pi-gui:toggle-window-maximize",
   listWorkspaceFiles: "pi-gui:list-workspace-files",
+  listWorkspaceDirectory: "pi-gui:list-workspace-directory",
   getChangedFiles: "pi-gui:get-changed-files",
   getFileDiff: "pi-gui:get-file-diff",
+  readWorkspaceFile: "pi-gui:read-workspace-file",
+  writeWorkspaceFile: "pi-gui:write-workspace-file",
   listCommitHistory: "pi-gui:list-commit-history",
   getCommitDetails: "pi-gui:get-commit-details",
   getCommitFileDiff: "pi-gui:get-commit-file-diff",
@@ -360,6 +395,7 @@ export interface PiDesktopApi {
   setActiveView(view: AppView): Promise<DesktopAppState>;
   setSidebarCollapsed(collapsed: boolean): Promise<DesktopAppState>;
   setSidebarWidth(sidebarWidth: number): Promise<DesktopAppState>;
+  setRightPanelWidths(rightPanelWidths: DesktopAppState["rightPanelWidths"]): Promise<DesktopAppState>;
   refreshRuntime(workspaceId?: string): Promise<DesktopAppState>;
   setDefaultModel(workspaceId: string | undefined, provider: string, modelId: string): Promise<DesktopAppState>;
   setDefaultThinkingLevel(
@@ -462,8 +498,18 @@ export interface PiDesktopApi {
     options?: NavigateSessionTreeOptions,
   ): Promise<{ readonly state: DesktopAppState; readonly result: NavigateSessionTreeResult }>;
   listWorkspaceFiles(workspaceId: string): Promise<string[]>;
+  listWorkspaceDirectory(
+    workspaceId: string,
+    relativePath?: string,
+  ): Promise<readonly WorkspaceDirectoryEntry[]>;
   getChangedFiles(workspaceId: string): Promise<{ path: string; status: "added" | "modified" | "deleted" | "untracked" }[]>;
   getFileDiff(workspaceId: string, filePath: string): Promise<string>;
+  readWorkspaceFile(workspaceId: string, filePath: string): Promise<WorkspaceFileContent>;
+  writeWorkspaceFile(
+    workspaceId: string,
+    filePath: string,
+    content: string,
+  ): Promise<WorkspaceFileWriteResult>;
   listCommitHistory(workspaceId: string): Promise<GitCommitHistoryEntry[]>;
   getCommitDetails(workspaceId: string, commitHash: string): Promise<GitCommitDetails>;
   getCommitFileDiff(workspaceId: string, commitHash: string, filePath: string): Promise<string>;

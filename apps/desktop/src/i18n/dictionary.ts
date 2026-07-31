@@ -118,6 +118,8 @@ const sidebarZh: Record<keyof typeof sidebarEn, string> = {
 const topbarEn = {
   "topbar.toggleTerminal": "Toggle terminal",
   "topbar.toggleChanges": "Toggle changes",
+  "topbar.toggleFileManager": "Toggle file manager",
+  "topbar.toggleFilePreview": "Toggle file preview",
   "topbar.toggleSystemPrompt": "Toggle system prompt",
   "topbar.toggleCliSplitPanel": "Toggle CLI split panel",
   "topbar.systemPrompt": "System Prompt",
@@ -130,6 +132,8 @@ const topbarEn = {
 const topbarZh: Record<keyof typeof topbarEn, string> = {
   "topbar.toggleTerminal": "切换终端",
   "topbar.toggleChanges": "切换变更",
+  "topbar.toggleFileManager": "切换文件管理器",
+  "topbar.toggleFilePreview": "切换文件预览",
   "topbar.toggleSystemPrompt": "切换系统提示",
   "topbar.toggleCliSplitPanel": "切换 CLI 分屏面板",
   "topbar.systemPrompt": "系统提示",
@@ -137,6 +141,74 @@ const topbarZh: Record<keyof typeof topbarEn, string> = {
   "topbar.local": "本地",
   "topbar.unavailable": "不可用",
   "topbar.newThread": "新线程",
+};
+
+// ─── File manager ───
+const fileManagerEn = {
+  "fileManager.title": "Files",
+  "fileManager.refresh": "Refresh files",
+  "fileManager.loading": "Loading files…",
+  "fileManager.empty": "This folder is empty.",
+  "fileManager.loadFailed": "Couldn’t load files.",
+  "fileManager.expandDirectory": "Expand {path}",
+  "fileManager.collapseDirectory": "Collapse {path}",
+  "fileManager.selectFile": "Select {path}",
+  "fileManager.selectDirectory": "Select directory {path}",
+  "fileManager.contextMenu": "File actions",
+  "fileManager.copyPath": "Copy file path",
+  "fileManager.copyPaths": "Copy selected file paths",
+  "fileManager.pathsCopied": "Selected file paths copied.",
+  "fileManager.copyFailed": "Couldn’t copy the selected file paths.",
+};
+
+const fileManagerZh: Record<keyof typeof fileManagerEn, string> = {
+  "fileManager.title": "文件",
+  "fileManager.refresh": "刷新文件",
+  "fileManager.loading": "正在加载文件…",
+  "fileManager.empty": "此文件夹为空。",
+  "fileManager.loadFailed": "无法加载文件。",
+  "fileManager.expandDirectory": "展开 {path}",
+  "fileManager.collapseDirectory": "收起 {path}",
+  "fileManager.selectFile": "选择 {path}",
+  "fileManager.selectDirectory": "选择文件夹 {path}",
+  "fileManager.contextMenu": "文件操作",
+  "fileManager.copyPath": "复制文件路径",
+  "fileManager.copyPaths": "复制选择的文件路径",
+  "fileManager.pathsCopied": "已复制选中文件路径。",
+  "fileManager.copyFailed": "无法复制选中文件路径。",
+};
+
+// ─── File preview ───
+const filePreviewEn = {
+  "filePreview.title": "Preview",
+  "filePreview.empty": "Select a file in the file tree to preview it here.",
+  "filePreview.loading": "Loading file…",
+  "filePreview.loadFailed": "Couldn’t load this file.",
+  "filePreview.save": "Save",
+  "filePreview.saving": "Saving…",
+  "filePreview.saved": "Saved.",
+  "filePreview.saveFailed": "Couldn’t save this file.",
+  "filePreview.unsavedChanges": "Unsaved changes",
+  "filePreview.unsupported": "Preview isn’t available for this file type.",
+  "filePreview.tooLarge": "This file is too large to preview.",
+  "filePreview.editorUnavailable": "The code editor couldn’t load, showing a plain text view instead.",
+  "filePreview.close": "Close preview",
+};
+
+const filePreviewZh: Record<keyof typeof filePreviewEn, string> = {
+  "filePreview.title": "预览",
+  "filePreview.empty": "在文件树中选择一个文件即可在此预览。",
+  "filePreview.loading": "正在加载文件…",
+  "filePreview.loadFailed": "无法加载此文件。",
+  "filePreview.save": "保存",
+  "filePreview.saving": "保存中…",
+  "filePreview.saved": "已保存。",
+  "filePreview.saveFailed": "无法保存此文件。",
+  "filePreview.unsavedChanges": "有未保存的更改",
+  "filePreview.unsupported": "此文件类型暂不支持预览。",
+  "filePreview.tooLarge": "文件过大，无法预览。",
+  "filePreview.editorUnavailable": "代码编辑器加载失败，已切换为纯文本视图。",
+  "filePreview.close": "关闭预览",
 };
 
 // ─── Settings: nav + section titles/descriptions ───
@@ -1334,6 +1406,8 @@ export const enDictionary: Dictionary = {
   ...appEn,
   ...sidebarEn,
   ...topbarEn,
+  ...fileManagerEn,
+  ...filePreviewEn,
   ...settingsEn,
   ...appearanceEn,
   ...generalEn,
@@ -1362,6 +1436,8 @@ export const zhDictionary: Dictionary = {
   ...appZh,
   ...sidebarZh,
   ...topbarZh,
+  ...fileManagerZh,
+  ...filePreviewZh,
   ...settingsZh,
   ...appearanceZh,
   ...generalZh,

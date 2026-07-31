@@ -121,6 +121,50 @@ export const DEFAULT_SIDEBAR_WIDTH = 292;
 export const MIN_SIDEBAR_WIDTH = 220;
 export const MAX_SIDEBAR_WIDTH = 600;
 
+export type RightPanelWidthKey = "diff" | "filePreview" | "fileManager" | "systemPrompt";
+export type RightPanelWidths = Readonly<Record<RightPanelWidthKey, number>>;
+
+export interface RightPanelWidthLimits {
+  readonly min: number;
+  readonly max: number;
+  readonly defaultValue: number;
+}
+
+export const RIGHT_PANEL_WIDTH_LIMITS: Readonly<Record<RightPanelWidthKey, RightPanelWidthLimits>> = {
+  diff: { min: 300, max: 760, defaultValue: 400 },
+  filePreview: { min: 320, max: 920, defaultValue: 520 },
+  fileManager: { min: 280, max: 640, defaultValue: 360 },
+  systemPrompt: { min: 320, max: 720, defaultValue: 400 },
+};
+
+export const DEFAULT_RIGHT_PANEL_WIDTHS: RightPanelWidths = {
+  diff: RIGHT_PANEL_WIDTH_LIMITS.diff.defaultValue,
+  filePreview: RIGHT_PANEL_WIDTH_LIMITS.filePreview.defaultValue,
+  fileManager: RIGHT_PANEL_WIDTH_LIMITS.fileManager.defaultValue,
+  systemPrompt: RIGHT_PANEL_WIDTH_LIMITS.systemPrompt.defaultValue,
+};
+
+export function normalizeRightPanelWidth(key: RightPanelWidthKey, value: unknown): number {
+  const numericValue = typeof value === "number" ? value : Number(value);
+  const limits = RIGHT_PANEL_WIDTH_LIMITS[key];
+  if (!Number.isFinite(numericValue)) {
+    return limits.defaultValue;
+  }
+  return Math.min(limits.max, Math.max(limits.min, Math.round(numericValue)));
+}
+
+export function normalizeRightPanelWidths(value: unknown): RightPanelWidths {
+  const candidate = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Partial<Record<RightPanelWidthKey, unknown>>
+    : {};
+  return {
+    diff: normalizeRightPanelWidth("diff", candidate.diff ?? DEFAULT_RIGHT_PANEL_WIDTHS.diff),
+    filePreview: normalizeRightPanelWidth("filePreview", candidate.filePreview ?? DEFAULT_RIGHT_PANEL_WIDTHS.filePreview),
+    fileManager: normalizeRightPanelWidth("fileManager", candidate.fileManager ?? DEFAULT_RIGHT_PANEL_WIDTHS.fileManager),
+    systemPrompt: normalizeRightPanelWidth("systemPrompt", candidate.systemPrompt ?? DEFAULT_RIGHT_PANEL_WIDTHS.systemPrompt),
+  };
+}
+
 export function normalizeTuiTabLimit(value: unknown): number {
   const numericValue = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(numericValue)) {
@@ -288,6 +332,7 @@ export interface DesktopAppState {
   readonly selectedSessionId: string;
   readonly activeView: AppView;
   readonly sidebarWidth: number;
+  readonly rightPanelWidths: RightPanelWidths;
   readonly runtimeByWorkspace: Readonly<Record<string, RuntimeSnapshot>>;
   readonly globalRuntime?: RuntimeSnapshot;
   readonly sessionCommandsBySession: Readonly<Record<string, readonly RuntimeCommandRecord[]>>;
@@ -338,6 +383,7 @@ export function createEmptyDesktopAppState(): DesktopAppState {
     selectedSessionId: "",
     activeView: "threads",
     sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
+    rightPanelWidths: DEFAULT_RIGHT_PANEL_WIDTHS,
     runtimeByWorkspace: {},
     sessionCommandsBySession: {},
     sessionExtensionUiBySession: {},

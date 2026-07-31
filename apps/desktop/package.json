@@ -96,12 +96,12 @@
   },
   "dependencies": {
     "@aws-sdk/token-providers": "^3.1036.0",
-    "@earendil-works/pi-coding-agent": "^0.80.6",
-    "@modelcontextprotocol/sdk": "^1.29.0",
     "@bimanus/cli-adapter": "workspace:*",
     "@bimanus/mcp-bridge-extension": "workspace:*",
     "@bimanus/pi-sdk-driver": "workspace:*",
     "@bimanus/session-driver": "workspace:*",
+    "@earendil-works/pi-coding-agent": "^0.80.6",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@smithy/is-array-buffer": "^2.2.0",
     "@smithy/util-buffer-from": "^2.2.0",
     "@smithy/util-utf8": "^2.3.0",
@@ -125,6 +125,7 @@
     "lru-cache": "^11.1.0",
     "mime-types": "^3.0.2",
     "minimatch": "^10.2.3",
+    "monaco-editor": "0.45.0",
     "node-pty": "^1.1.0",
     "parse5": "^5.1.1",
     "parse5-htmlparser2-tree-adapter": "^6.0.1",
@@ -157,11 +158,11 @@
     "vite-tsconfig-paths": "^6.1.1"
   },
   "optionalDependencies": {
-    "@vscode/ripgrep-win32-arm64": "1.18.0",
-    "@vscode/ripgrep-win32-x64": "1.18.0",
-    "@vscode/ripgrep-darwin-x64": "1.18.0",
     "@vscode/ripgrep-darwin-arm64": "1.18.0",
+    "@vscode/ripgrep-darwin-x64": "1.18.0",
+    "@vscode/ripgrep-linux-arm64": "1.18.0",
     "@vscode/ripgrep-linux-x64": "1.18.0",
-    "@vscode/ripgrep-linux-arm64": "1.18.0"
+    "@vscode/ripgrep-win32-arm64": "1.18.0",
+    "@vscode/ripgrep-win32-x64": "1.18.0"
   }
 }

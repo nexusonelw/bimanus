@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import type { SessionTreeSnapshot } from "@bimanus/session-driver/types";
 import type { RuntimeSnapshot } from "@bimanus/session-driver/runtime-types";
 import {
+  DEFAULT_RIGHT_PANEL_WIDTHS,
   DEFAULT_SIDEBAR_WIDTH,
   getSelectedSession,
   getSelectedWorkspace,
@@ -11,11 +12,15 @@ import {
   type LocaleSetting,
   type McpServerConfigInput,
   type NewThreadEnvironment,
+  type RightPanelWidthKey,
+  type RightPanelWidths,
   type WorkspaceRecord,
   type WorkspaceSessionTarget,
 } from "./desktop-state";
 import { I18nProvider, translate, useI18n } from "./i18n";
 import { DiffPanel, type DiffPanelFileRequest } from "./diff-panel";
+import { FileManagerPanel } from "./file-manager-panel";
+import { FilePreviewPanel } from "./file-preview-panel";
 import { SystemPromptPanel } from "./system-prompt-panel";
 import { buildModelOptions } from "./composer-commands";
 import {
@@ -42,6 +47,7 @@ import { TerminalPanel } from "./terminal-panel";
 import { SplitPanel } from "./split-panel/split-panel";
 import { useMobileBreakpoint } from "./use-mobile-breakpoint";
 import { useThreadSearch } from "./hooks/use-thread-search";
+import { useRightPanelResize } from "./hooks/use-right-panel-resize";
 import {
   createExistingTuiSessionKey,
   findWorkspaceById,
@@ -339,6 +345,17 @@ export default function App() {
   const didAutoOpenTuiRef = useRef(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
+  const [showFileManager, setShowFileManager] = useState(false);
+  const [fileManagerExpandedDirectoriesByWorkspaceId, setFileManagerExpandedDirectoriesByWorkspaceId] =
+    useState<Readonly<Record<string, readonly string[]>>>({});
+  // File preview panel: independent from the file-manager tree panel, but the
+  // two are linked — clicking a file in the tree opens (and reveals) the
+  // preview panel. `activePreviewFilePathByWorkspaceId` deliberately survives
+  // closing the panel so that re-opening it restores whatever file was last
+  // open for that workspace; it only stays empty if nothing was ever opened.
+  const [showFilePreview, setShowFilePreview] = useState(false);
+  const [activePreviewFilePathByWorkspaceId, setActivePreviewFilePathByWorkspaceId] =
+    useState<Readonly<Record<string, string | null>>>({});
   const [showSystemPromptPanel, setShowSystemPromptPanel] = useState(false);
   const [openTerminalSessionKeys, setOpenTerminalSessionKeys] = useState<Readonly<Record<string, boolean>>>({});
   const [takeoverTerminalSessionKeys, setTakeoverTerminalSessionKeys] = useState<Readonly<Record<string, boolean>>>({});
@@ -349,6 +366,7 @@ export default function App() {
   const tuiPerfTraceBySessionKeyRef = useRef(new Map<string, string>());
   const [terminalHeight, setTerminalHeight] = useState(340);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
+  const [rightPanelWidths, setRightPanelWidths] = useState<RightPanelWidths>(DEFAULT_RIGHT_PANEL_WIDTHS);
   const sidebarWidthInitializedRef = useRef(false);
   const [diffFileRequest, setDiffFileRequest] = useState<DiffPanelFileRequest | null>(null);
   const [timelinePaneMountVersion, setTimelinePaneMountVersion] = useState(0);
@@ -414,6 +432,12 @@ export default function App() {
     sidebarWidthInitializedRef.current = true;
     setSidebarWidth(snapshot.sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH);
   }, [snapshot?.sidebarWidth]);
+
+  useEffect(() => {
+    if (snapshot?.rightPanelWidths) {
+      setRightPanelWidths(snapshot.rightPanelWidths);
+    }
+  }, [snapshot?.rightPanelWidths]);
 
   useEffect(() => {
     const piApi = window.piApp;
@@ -529,7 +553,40 @@ export default function App() {
 
   const splitPanelWorkspaceId = tuiWorkspaceId ?? selectedWorkspace?.id ?? "";
   const diffPanelWorkspaceId = splitPanelWorkspaceId;
+  // Use the exact same active workspace target as the Git panel.
+  const fileManagerWorkspace = tuiWorkspaceId ? tuiWorkspace : selectedWorkspace;
+  const fileManagerWorkspaceId = diffPanelWorkspaceId;
+  // The preview panel piggybacks on the exact same workspace target as the
+  // file-manager tree so that clicking a tree entry always previews in the
+  // right place, and so it disappears/reappears in lockstep with the tree.
+  const filePreviewWorkspace = fileManagerWorkspace;
+  const filePreviewWorkspaceId = fileManagerWorkspaceId;
+  const activePreviewFilePath = filePreviewWorkspaceId
+    ? activePreviewFilePathByWorkspaceId[filePreviewWorkspaceId] ?? null
+    : null;
   const diffPanelSessionStatus = tuiWorkspaceId ? tuiSession?.status : selectedSession?.status;
+  const openRightPanels = useMemo<readonly RightPanelWidthKey[]>(() => {
+    const panels: RightPanelWidthKey[] = [];
+    if (showDiffPanel && diffPanelWorkspaceId) {
+      panels.push("diff");
+    }
+    if (showFilePreview && filePreviewWorkspace && filePreviewWorkspaceId) {
+      panels.push("filePreview");
+    }
+    if (showFileManager && fileManagerWorkspace && fileManagerWorkspaceId) {
+      panels.push("fileManager");
+    }
+    return panels;
+  }, [
+    diffPanelWorkspaceId,
+    fileManagerWorkspace,
+    fileManagerWorkspaceId,
+    filePreviewWorkspace,
+    filePreviewWorkspaceId,
+    showDiffPanel,
+    showFileManager,
+    showFilePreview,
+  ]);
   const splitPanelTabs = useSplitPanelTabs(splitPanelWorkspaceId);
   const showSplitPanel = Boolean(splitPanelWorkspaceId && splitPanelWorkspaceKeys[splitPanelWorkspaceId]);
   const { prune: pruneSplitPanelTabs } = splitPanelTabs;
@@ -1116,6 +1173,81 @@ export default function App() {
     schedulePinnedBottomRealignment(3);
   }, [schedulePinnedBottomRealignment]);
 
+  const updateFileManagerExpandedDirectories = useCallback(
+    (workspaceId: string, expandedDirectories: readonly string[]) => {
+      const nextDirectories = [...expandedDirectories].sort();
+      setFileManagerExpandedDirectoriesByWorkspaceId((current) => {
+        const currentDirectories = current[workspaceId];
+        if (
+          currentDirectories?.length === nextDirectories.length &&
+          currentDirectories.every((directoryPath, index) => directoryPath === nextDirectories[index])
+        ) {
+          return current;
+        }
+        return { ...current, [workspaceId]: nextDirectories };
+      });
+    },
+    [],
+  );
+
+  const toggleFileManager = useCallback(() => {
+    if (!fileManagerWorkspaceId) {
+      return;
+    }
+
+    const pane = timelinePaneRef.current;
+    const shouldPreserveBottom = pane ? isNearBottom(pane) || pinnedToBottomRef.current : pinnedToBottomRef.current;
+    if (shouldPreserveBottom) {
+      preserveBottomOnNextPaneResizeRef.current = true;
+    }
+
+    setShowFileManager((prev) => !prev);
+
+    if (shouldPreserveBottom) {
+      schedulePinnedBottomRealignment(3);
+    }
+  }, [fileManagerWorkspaceId, schedulePinnedBottomRealignment]);
+
+  // Toggling the preview panel never touches `activePreviewFilePathByWorkspaceId` —
+  // whatever file was last open (or `null` if none ever was) simply becomes
+  // visible/hidden again, per the "keep last file, or stay empty" requirement.
+  const toggleFilePreview = useCallback(() => {
+    if (!filePreviewWorkspaceId) {
+      return;
+    }
+
+    const pane = timelinePaneRef.current;
+    const shouldPreserveBottom = pane ? isNearBottom(pane) || pinnedToBottomRef.current : pinnedToBottomRef.current;
+    if (shouldPreserveBottom) {
+      preserveBottomOnNextPaneResizeRef.current = true;
+    }
+
+    setShowFilePreview((prev) => !prev);
+
+    if (shouldPreserveBottom) {
+      schedulePinnedBottomRealignment(3);
+    }
+  }, [filePreviewWorkspaceId, schedulePinnedBottomRealignment]);
+
+  // Invoked by the file-manager tree when a file row is clicked: records the
+  // file as "active" for this workspace and forces the preview panel open,
+  // regardless of its current visibility.
+  const openFileInPreview = useCallback(
+    (filePath: string) => {
+      if (!filePreviewWorkspaceId) {
+        return;
+      }
+      setActivePreviewFilePathByWorkspaceId((current) => {
+        if (current[filePreviewWorkspaceId] === filePath) {
+          return current;
+        }
+        return { ...current, [filePreviewWorkspaceId]: filePath };
+      });
+      setShowFilePreview(true);
+    },
+    [filePreviewWorkspaceId],
+  );
+
   const openSettings = (workspaceId?: string, section?: SettingsSection) => {
     if (!api) {
       return;
@@ -1323,6 +1455,52 @@ export default function App() {
     }
     void updateSnapshot(api, setSnapshot, () => api.setSidebarWidth(nextWidth));
   }, [api, setSnapshot]);
+  const handleRightPanelWidthsChange = useCallback((nextWidths: RightPanelWidths) => {
+    setRightPanelWidths(nextWidths);
+  }, []);
+  const handleRightPanelWidthsCommit = useCallback((nextWidths: RightPanelWidths) => {
+    setRightPanelWidths(nextWidths);
+    if (!api) {
+      return;
+    }
+    void updateSnapshot(api, setSnapshot, () => api.setRightPanelWidths(nextWidths));
+  }, [api, setSnapshot]);
+  const shellRightPanelResize = useRightPanelResize({
+    disabled: isMobile,
+    openPanels: openRightPanels,
+    panelWidths: rightPanelWidths,
+    onWidthsChange: handleRightPanelWidthsChange,
+    onWidthsCommit: handleRightPanelWidthsCommit,
+  });
+  const systemPromptResizePanels = useMemo<readonly RightPanelWidthKey[]>(
+    () => showSystemPromptPanel ? ["systemPrompt"] : [],
+    [showSystemPromptPanel],
+  );
+  const systemPromptPanelResize = useRightPanelResize({
+    disabled: isMobile,
+    openPanels: systemPromptResizePanels,
+    panelWidths: rightPanelWidths,
+    onWidthsChange: handleRightPanelWidthsChange,
+    onWidthsCommit: handleRightPanelWidthsCommit,
+  });
+  const renderShellRightPanelResizeHandles = useCallback((panel: RightPanelWidthKey) => {
+    const availability = shellRightPanelResize.getResizeHandleAvailability(panel);
+    return (
+      <>
+        {availability.left ? <div {...shellRightPanelResize.getResizeHandleProps(panel, "left")} /> : null}
+        {availability.right ? <div {...shellRightPanelResize.getResizeHandleProps(panel, "right")} /> : null}
+      </>
+    );
+  }, [shellRightPanelResize]);
+  const renderSystemPromptResizeHandles = useCallback(() => {
+    const availability = systemPromptPanelResize.getResizeHandleAvailability("systemPrompt");
+    return (
+      <>
+        {availability.left ? <div {...systemPromptPanelResize.getResizeHandleProps("systemPrompt", "left")} /> : null}
+        {availability.right ? <div {...systemPromptPanelResize.getResizeHandleProps("systemPrompt", "right")} /> : null}
+      </>
+    );
+  }, [systemPromptPanelResize]);
   const sidebarToggleShortcutLabel = api ? getDesktopShortcutLabel(api.platform, "B") : "";
 
   useEffect(() => {
@@ -1675,6 +1853,12 @@ export default function App() {
           onToggleTerminal={toggleTerminal}
           showDiffPanel={showDiffPanel}
           onToggleDiffPanel={toggleDiffPanel}
+          fileManagerAvailable={Boolean(fileManagerWorkspaceId)}
+          showFileManager={showFileManager}
+          onToggleFileManager={toggleFileManager}
+          filePreviewAvailable={Boolean(filePreviewWorkspaceId)}
+          showFilePreview={showFilePreview}
+          onToggleFilePreview={toggleFilePreview}
           showSystemPromptPanel={showSystemPromptPanel}
           onToggleSystemPromptPanel={toggleSystemPromptPanel}
           showSplitPanel={showSplitPanel}
@@ -2324,8 +2508,17 @@ export default function App() {
     );
   }
 
-  const shellClassName = `shell${snapshot.sidebarCollapsed ? " shell--sidebar-collapsed" : ""}${showSplitPanel ? " shell--with-split-panel" : ""}${showDiffPanel ? " shell--with-diff-panel" : ""}`;
-  const shellStyle = { ["--sidebar-width" as "--sidebar-width"]: `${sidebarWidth}px` } as CSSProperties & Record<"--sidebar-width", string>;
+  const shellClassName = `shell${snapshot.sidebarCollapsed ? " shell--sidebar-collapsed" : ""}${showSplitPanel ? " shell--with-split-panel" : ""}${showDiffPanel ? " shell--with-diff-panel" : ""}${showFileManager && fileManagerWorkspaceId ? " shell--with-file-manager" : ""}${showFilePreview && filePreviewWorkspaceId ? " shell--with-file-preview" : ""}`;
+  const shellStyle = {
+    ["--sidebar-width" as "--sidebar-width"]: `${sidebarWidth}px`,
+    ["--diff-panel-width" as "--diff-panel-width"]: `${rightPanelWidths.diff}px`,
+    ["--file-preview-panel-width" as "--file-preview-panel-width"]: `${rightPanelWidths.filePreview}px`,
+    ["--file-manager-panel-width" as "--file-manager-panel-width"]: `${rightPanelWidths.fileManager}px`,
+    ["--system-prompt-panel-width" as "--system-prompt-panel-width"]: `${rightPanelWidths.systemPrompt}px`,
+  } as CSSProperties & Record<
+    "--sidebar-width" | "--diff-panel-width" | "--file-preview-panel-width" | "--file-manager-panel-width" | "--system-prompt-panel-width",
+    string
+  >;
   // TUI takeover hides the topbar; keep a floating expand control when the sidebar is collapsed.
   const showFloatingSidebarToggle =
     primarySidebarToggleVisible && snapshot.sidebarCollapsed && showTuiTakeover;
@@ -2390,6 +2583,12 @@ export default function App() {
             onToggleTerminal={toggleTerminal}
             showDiffPanel={showDiffPanel}
             onToggleDiffPanel={toggleDiffPanel}
+            fileManagerAvailable={Boolean(fileManagerWorkspaceId)}
+            showFileManager={showFileManager}
+            onToggleFileManager={toggleFileManager}
+            filePreviewAvailable={Boolean(filePreviewWorkspaceId)}
+            showFilePreview={showFilePreview}
+            onToggleFilePreview={toggleFilePreview}
             showSystemPromptPanel={showSystemPromptPanel}
             onToggleSystemPromptPanel={toggleSystemPromptPanel}
             showSplitPanel={showSplitPanel}
@@ -2444,6 +2643,7 @@ export default function App() {
             api={api}
             setSnapshot={setSnapshot}
             updateSnapshot={updateSnapshot}
+            resizeHandles={renderSystemPromptResizeHandles()}
           />
         ) : null}
       </main>
@@ -2477,6 +2677,33 @@ export default function App() {
           api={api}
           sessionStatus={diffPanelSessionStatus}
           fileRequest={diffFileRequest}
+          resizeHandles={renderShellRightPanelResizeHandles("diff")}
+        />
+      ) : null}
+      {showFilePreview && filePreviewWorkspace && filePreviewWorkspaceId ? (
+        <FilePreviewPanel
+          key={filePreviewWorkspaceId}
+          workspaceId={filePreviewWorkspaceId}
+          workspaceName={filePreviewWorkspace.name}
+          workspacePath={filePreviewWorkspace.path}
+          api={api}
+          filePath={activePreviewFilePath}
+          resizeHandles={renderShellRightPanelResizeHandles("filePreview")}
+        />
+      ) : null}
+      {showFileManager && fileManagerWorkspace && fileManagerWorkspaceId ? (
+        <FileManagerPanel
+          key={fileManagerWorkspaceId}
+          workspaceId={fileManagerWorkspaceId}
+          workspaceName={fileManagerWorkspace.name}
+          workspacePath={fileManagerWorkspace.path}
+          api={api}
+          initialExpandedDirectories={
+            fileManagerExpandedDirectoriesByWorkspaceId[fileManagerWorkspaceId]
+          }
+          onExpandedDirectoriesChange={updateFileManagerExpandedDirectories}
+          onOpenFile={openFileInPreview}
+          resizeHandles={renderShellRightPanelResizeHandles("fileManager")}
         />
       ) : null}
     </div>

@@ -770,7 +770,10 @@ export function TerminalPanel({
       }
       const commandModifier = api.platform === "darwin" ? event.metaKey : event.ctrlKey;
       const key = event.key.toLowerCase();
-      if (api.platform !== "darwin" && isTerminalPasteShortcut(event)) {
+      if (latestLaunchConfigRef.current?.mode === "pi-tui" && isPiImagePasteShortcut(event, api.platform)) {
+        return true;
+      }
+      if (isTerminalPasteShortcut(event)) {
         void pasteClipboardTextIntoTerminal(terminal, api);
         return false;
       }
@@ -1499,9 +1502,22 @@ function hasMeaningfulTerminalReplay(replay: string): boolean {
   return stripAnsi(replay).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "").trim().length > 0;
 }
 
+function isPiImagePasteShortcut(event: KeyboardEvent, platform: string): boolean {
+  if (event.key.toLowerCase() !== "v" || event.shiftKey) {
+    return false;
+  }
+
+  if (platform === "win32") {
+    return event.altKey && !event.ctrlKey && !event.metaKey;
+  }
+
+  return event.ctrlKey && !event.altKey && !event.metaKey;
+}
+
 function isTerminalPasteShortcut(event: KeyboardEvent): boolean {
   const key = event.key.toLowerCase();
-  return (event.ctrlKey && key === "v") || (event.shiftKey && event.key === "Insert");
+  return ((event.ctrlKey || event.metaKey) && !event.altKey && key === "v") ||
+    (event.shiftKey && event.key === "Insert");
 }
 
 async function pasteClipboardTextIntoTerminal(terminal: Terminal, api: NonNullable<typeof window.piApp>): Promise<void> {

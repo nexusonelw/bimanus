@@ -171,9 +171,10 @@ interface DiffPanelProps {
   readonly api: PiDesktopApi;
   readonly sessionStatus: string | undefined;
   readonly fileRequest?: DiffPanelFileRequest | null;
+  readonly resizeHandles?: ReactNode;
 }
 
-export function DiffPanel({ workspaceId, api, sessionStatus, fileRequest }: DiffPanelProps) {
+export function DiffPanel({ workspaceId, api, sessionStatus, fileRequest, resizeHandles }: DiffPanelProps) {
   const { t } = useI18n();
   const [mode, setMode] = useState<"changes" | "history">("changes");
   const [files, setFiles] = useState<readonly ChangedFile[]>([]);
@@ -759,6 +760,7 @@ export function DiffPanel({ workspaceId, api, sessionStatus, fileRequest }: Diff
 
   return (
     <aside className="diff-panel">
+      {resizeHandles}
       <div className="diff-panel__header">
         <h2 className="diff-panel__title">
           {mode === "history" ? t("diff.history") : t("diff.changes")}

@@ -18,6 +18,9 @@ import {
   type OpenCodingCliEvent,
   type GitCommitDetails,
   type GitCommitHistoryEntry,
+  type WorkspaceDirectoryEntry,
+  type WorkspaceFileContent,
+  type WorkspaceFileWriteResult,
 } from "../src/ipc";
 import type {
   NavigateSessionTreeOptions,
@@ -153,6 +156,8 @@ contextBridge.exposeInMainWorld("piApp", {
     invokeIpc(desktopIpc.setSidebarCollapsed, collapsed) as Promise<DesktopAppState>,
   setSidebarWidth: (sidebarWidth: number) =>
     invokeIpc(desktopIpc.setSidebarWidth, sidebarWidth) as Promise<DesktopAppState>,
+  setRightPanelWidths: (rightPanelWidths: DesktopAppState["rightPanelWidths"]) =>
+    invokeIpc(desktopIpc.setRightPanelWidths, rightPanelWidths) as Promise<DesktopAppState>,
   refreshRuntime: (workspaceId?: string) =>
     invokeIpc(desktopIpc.refreshRuntime, workspaceId) as Promise<DesktopAppState>,
   setDefaultModel: (workspaceId: string | undefined, provider: string, modelId: string) =>
@@ -284,10 +289,20 @@ contextBridge.exposeInMainWorld("piApp", {
     }>,
   listWorkspaceFiles: (workspaceId: string) =>
     invokeIpc(desktopIpc.listWorkspaceFiles, workspaceId) as Promise<string[]>,
+  listWorkspaceDirectory: (workspaceId: string, relativePath = "") =>
+    invokeIpc(desktopIpc.listWorkspaceDirectory, workspaceId, relativePath) as Promise<
+      readonly WorkspaceDirectoryEntry[]
+    >,
   getChangedFiles: (workspaceId: string) =>
     invokeIpc(desktopIpc.getChangedFiles, workspaceId) as Promise<{ path: string; status: "added" | "modified" | "deleted" | "untracked" }[]>,
   getFileDiff: (workspaceId: string, filePath: string) =>
     invokeIpc(desktopIpc.getFileDiff, workspaceId, filePath) as Promise<string>,
+  readWorkspaceFile: (workspaceId: string, filePath: string) =>
+    invokeIpc(desktopIpc.readWorkspaceFile, workspaceId, filePath) as Promise<WorkspaceFileContent>,
+  writeWorkspaceFile: (workspaceId: string, filePath: string, content: string) =>
+    invokeIpc(desktopIpc.writeWorkspaceFile, workspaceId, filePath, content) as Promise<
+      WorkspaceFileWriteResult
+    >,
   listCommitHistory: (workspaceId: string) =>
     invokeIpc(desktopIpc.listCommitHistory, workspaceId) as Promise<GitCommitHistoryEntry[]>,
   getCommitDetails: (workspaceId: string, commitHash: string) =>

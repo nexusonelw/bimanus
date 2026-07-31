@@ -529,6 +529,7 @@
 .session-row__select {
   width: 100%;
   min-width: 0;
+  padding: 0;
   display: flex;
   align-items: center;
   gap: 0;
@@ -563,11 +564,11 @@
 .session-list__collapse-button {
   width: 100%;
   min-height: 32px;
-  padding: 6px 10px;
+  padding: 6px 10px 6px 9px;
   border-radius: 10px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 6px;
   color: #697aff;
   font-size: 13px;
@@ -680,7 +681,7 @@
 @media (max-width: 768px) {
   /*
    * All mobile shells use horizontal scroll-snap paging.
-   * Pages (left→right): .sidebar → .main → .split-panel (if present) → .diff-panel (if present).
+   * Pages (left→right): .sidebar → .main → .split-panel (if present) → .diff-panel or .file-manager-panel.
    * Users swipe / drag the scrollbar to navigate between pages.
    * The sidebar-toggle button is hidden on mobile — paging replaces it.
    */
@@ -728,7 +729,9 @@
   .shell > .sidebar,
   .shell > .main,
   .shell > .split-panel,
-  .shell > .diff-panel {
+  .shell > .diff-panel,
+  .shell > .file-manager-panel,
+  .shell > .file-preview-panel {
     flex: 0 0 100% !important;
     width: 100% !important;
     min-width: 100% !important;
@@ -747,12 +750,14 @@
   }
 
   .shell > .split-panel,
-  .shell > .diff-panel {
+  .shell > .diff-panel,
+  .shell > .file-manager-panel {
     border-left: none;
   }
 
-  .shell > .split-panel__divider {
-    display: none;
+  .shell > .split-panel__divider,
+  .right-panel-resize-handle {
+    display: none !important;
   }
 
   /* Hide all sidebar toggle button variants on mobile — paging replaces them. */
